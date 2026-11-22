@@ -157,6 +157,8 @@ create table if not exists public.messages (
   body        text not null check (char_length(body) between 1 and 2000),
   created_at  timestamptz not null default now()
 );
+alter table public.messages add column if not exists audio text;
+alter table public.messages add column if not exists dur int;
 create index if not exists messages_channel_created on public.messages (channel, created_at desc);
 alter table public.messages enable row level security;
 create or replace function public.messages_guard() returns trigger
@@ -266,8 +268,8 @@ revoke execute on function public.media_guard() from public, anon, authenticated
 
 -- Almacenamiento privado (máx. 50 MB por archivo: límite del plan gratis)
 insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
-values ('media', 'media', false, 52428800, array['image/*','video/*'])
-on conflict (id) do update set public = false, file_size_limit = 52428800, allowed_mime_types = array['image/*','video/*'];
+values ('media', 'media', false, 52428800, array['image/*','video/*','audio/*'])
+on conflict (id) do update set public = false, file_size_limit = 52428800, allowed_mime_types = array['image/*','video/*','audio/*'];
 drop policy if exists "sj media leer" on storage.objects;
 create policy "sj media leer" on storage.objects for select to authenticated
   using (bucket_id = 'media' and public.is_member());
