@@ -7,4 +7,5 @@
 window.SJ_CONFIG = {
   supabaseUrl: 'https://ifhapipxopoosdmzddtx.supabase.co',
   supabaseKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlmaGFwaXB4b3Bvb3NkbXpkZHR4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTUzNDk4ODQsImV4cCI6MjExMDkyNTg4NH0.Yh5m-5JtmmyW7EBocM7ADO2E0o_G3z9qAlPlUSzXQm4'  // clave anon (pública)
+  , dropboxKey: ''  // App key de Dropbox (Chooser) para elegir vídeos desde Administración
 };
