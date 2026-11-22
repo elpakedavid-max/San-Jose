@@ -455,20 +455,34 @@ const goalsOf=pid=>{const out=[];for(const m of played())m.ev.forEach((e,i)=>{if
 const clipBtn=(m,e,i,small)=>{const L=vids(m),has=e.ts!=null&&L[e.v||0];if(has)return `<button class="btn sm" style="width:auto;padding:0 12px;margin:0;flex:none" data-act="clip" data-v="${m.id}:${i}">▶ Ver gol</button>`;
  if(coach()&&L.some(x=>raw(x.u)))return `<button class="btn ghost sm" style="width:auto;padding:0 12px;margin:0;flex:none" data-act="clipmark" data-v="${m.id}:${i}">🎯 Marcar</button>`;return ''};
 const goalRow=({m,e,i})=>{const L=vids(m),has=e.ts!=null&&L[e.v||0];return `<div class="row"><span class="dor">${tag(P(e.pl))}</span><span class="grow"><b>${esc(P(e.pl).n)}</b>${e.asis?` <span class="sub">(asist. ${esc(P(e.asis).n)})</span>`:''}<div class="sub">vs ${esc(m.rival)} · ${fdate(m.fecha)}${has?' · '+esc(L[e.v||0].t)+' '+fmt(e.ts):''}</div></span>${clipBtn(m,e,i)}</div>`};
-function clipSheet(){const C=V.clip,m=M(C.mid);if(!m)return '';const e=m.ev[C.i];if(!e)return '';const L=vids(m),k=C.mode==='mark'?(C.v??e.v??0):(e.v||0),x=L[k],src=x&&raw(x.u);
- return `<div class="sheet" data-act="clipx"><div data-act="noop"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>${C.mode==='mark'?'Marca el gol de ':'Gol de '}${esc(P(e.pl).n)}</h2><button class="link" data-act="clipx">Cerrar</button></div>
- <p class="sub">vs ${esc(m.rival)} · ${fdate(m.fecha)}${C.mode==='view'&&x?' · '+esc(x.t)+' '+fmt(e.ts):''}</p>
- ${C.mode==='mark'&&L.length>1?`<div class="chips" style="margin:10px 0">${L.map((y,j)=>`<button class="chip ${j===k?'on':''}" data-act="clipv" data-v="${j}">${esc(y.t)}</button>`).join('')}</div>`:''}
- ${src?`<video id="clipv" src="${esc(src)}" controls playsinline preload="metadata" style="width:100%;max-height:52vh;border-radius:12px;background:#000;margin-top:8px;display:block"></video>`:'<p class="sub">Para marcar y ver jugadas, el vídeo tiene que ser un enlace de Dropbox a un archivo .mp4 o .mov.</p>'}
- ${C.mode==='mark'&&src?`<p class="sub">Mueve la barra del vídeo hasta el momento en que entra el balón y pulsa el botón. Se verá desde ${PRE} s antes hasta ${POST} s después.</p>
- <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">${[-5,-1,1,5].map(d=>`<button class="chip" data-act="seek" data-v="${d}">${d>0?'+':''}${d} s</button>`).join('')}</div>
- <button class="btn acc" data-act="mark">⚽ El gol es aquí</button>${e.ts!=null?'<button class="btn ghost sm" data-act="unmark">Quitar el momento guardado</button>':''}`:''}
- ${C.mode==='view'&&src?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px"><button class="btn ghost sm" data-act="replay">↺ Repetir</button><button class="btn ghost sm" data-act="cont">Seguir viendo</button></div>${coach()?'<button class="link" data-act="clipedit">Cambiar el momento</button>':''}`:''}
+function clipSheet(){const C=V.clip,m=M(C.mid);if(!m)return '';const e=m.ev[C.i];if(!e)return '';const L=vids(m),mark=C.mode==='mark',k=mark?(C.v??e.v??0):(e.v||0),x=L[k],src=x&&raw(x.u);
+ const t0=mark?(C.t??(C.v==null||C.v===(e.v||0)?e.ts:null)??0):e.ts,mm=Math.floor(t0/60),ss=Math.round(t0%60);
+ const big='min-height:52px;font-size:16px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);font-weight:700;cursor:pointer';
+ return `<div class="sheet" data-act="clipx"><div data-act="noop">
+ <div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>${mark?'⚽ Momento del gol':'⚽ Gol de '+esc(P(e.pl).n)}</h2><button class="link" data-act="clipx">Cerrar</button></div>
+ <p class="sub">${mark?'Gol de <b>'+esc(P(e.pl).n)+'</b> · ':''}vs ${esc(m.rival)} · ${fdate(m.fecha)}${!mark&&x?' · '+esc(x.t)+' '+fmt(e.ts):''}</p>
+ ${mark?`<p style="margin:14px 0 6px;font-weight:700">1. ¿En qué vídeo está el gol?</p><div class="chips">${L.map((y,j)=>`<button class="chip ${j===k?'on':''}" style="min-height:48px" data-act="clipv" data-v="${j}">${esc(y.t)}</button>`).join('')}</div>`:''}
+ ${src?`<video id="clipv" src="${esc(src)}" controls playsinline preload="auto" style="width:100%;max-height:42vh;border-radius:12px;background:#000;margin-top:10px;display:block"></video>
+ <p id="clipst" class="sub" style="text-align:center;margin:6px 0">Cargando vídeo…</p>`:'<p class="info" style="margin-top:10px">Este vídeo no se puede reproducir dentro de la app. Escribe el minuto a mano.</p>'}
+ ${mark?`${src?`<div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px">${[[-10,'−10 s'],[-2,'−2 s'],['pp','▶ ❚❚'],[2,'+2 s'],[10,'+10 s']].map(([d,l])=>`<button style="${big}" data-act="${d==='pp'?'clippp':'seek'}" data-v="${d}">${l}</button>`).join('')}</div>
+ <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:6px"><button style="${big}" data-act="seek" data-v="-60">−1 min</button><button style="${big}" data-act="seek" data-v="60">+1 min</button></div>
+ <button class="btn ghost" data-act="clipuse">⬇ Usar el momento que estoy viendo</button>`:''}
+ <p style="margin:14px 0 6px;font-weight:700">2. ¿En qué momento del vídeo entra el balón?</p>
+ <div style="display:flex;align-items:center;gap:8px"><input id="cmm" type="number" inputmode="numeric" min="0" max="200" value="${mm}" aria-label="Minuto" style="text-align:center;font:700 26px 'Barlow Condensed',sans-serif"><b style="font-size:26px">:</b><input id="css" type="number" inputmode="numeric" min="0" max="59" value="${String(ss).padStart(2,'0')}" aria-label="Segundo" style="text-align:center;font:700 26px 'Barlow Condensed',sans-serif"></div>
+ <p class="sub" style="display:flex;justify-content:space-around;margin:2px 0 0"><span>minuto</span><span>segundo</span></p>
+ ${src?'<button class="btn ghost sm" data-act="clipprev">▶ Probar la jugada</button>':''}
+ <p class="err" id="clerr"></p><button class="btn acc" data-act="mark">✔ Guardar momento del gol</button>
+ <p class="sub">Se verá desde ${PRE} s antes hasta ${POST} s después.</p>${e.ts!=null?'<button class="btn ghost sm" data-act="unmark">Quitar el momento guardado</button>':''}`
+ :`${src?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px"><button class="btn ghost sm" data-act="replay">↺ Repetir</button><button class="btn ghost sm" data-act="cont">Seguir viendo</button></div>`:''}${x?`<a class="btn ghost sm" style="display:grid;place-items:center;text-decoration:none" href="${esc(x.u)}" target="_blank" rel="noopener">Abrir el vídeo en Dropbox (gol en el ${fmt(e.ts)})</a>`:''}${coach()?'<button class="link" data-act="clipedit">Cambiar el momento</button>':''}`}
  </div></div>`}
-function setupClip(){const v=document.getElementById('clipv');if(!v||!V.clip)return;const C=V.clip,e=M(C.mid).ev[C.i];
- const start=C.mode==='view'?Math.max(0,e.ts-PRE):(C.t??(C.v==null||C.v===(e.v||0)?e.ts:0)??0);C.stop=C.mode==='view'?e.ts+POST:null;
- v.addEventListener('loadedmetadata',()=>{try{v.currentTime=start}catch(_){}if(C.mode==='view')v.play().catch(()=>{})},{once:true});
- v.addEventListener('timeupdate',()=>{if(V.clip===C&&C.stop!=null&&v.currentTime>=C.stop){v.pause();C.stop=null}})}
+function setupClip(){const v=document.getElementById('clipv');if(!v||!V.clip)return;const C=V.clip,e=M(C.mid).ev[C.i],st=document.getElementById('clipst');
+ const start=C.mode==='view'?Math.max(0,e.ts-PRE):(C.t??(C.v==null||C.v===(e.v||0)?e.ts:null)??0);C.stop=C.mode==='view'?e.ts+POST:null;
+ const show=()=>{if(st)st.textContent=C.mode==='mark'?`Estás en ${fmt(v.currentTime)} de ${fmt(v.duration||0)}`:`Jugada ${fmt(v.currentTime)}`};
+ v.addEventListener('loadedmetadata',()=>{try{v.currentTime=start}catch(_){}show();if(C.mode==='view')v.play().catch(()=>{})},{once:true});
+ v.addEventListener('timeupdate',()=>{show();if(V.clip===C&&C.stop!=null&&v.currentTime>=C.stop){v.pause();C.stop=null}});
+ v.addEventListener('seeked',show);
+ v.addEventListener('error',()=>{if(st)st.innerHTML='<b style="color:var(--bad)">No se ha podido cargar el vídeo en este móvil.</b>'+(C.mode==='mark'?' Escribe el minuto y segundo a mano (míralo en Dropbox).':' Ábrelo en Dropbox con el botón de abajo.')});
+ try{v.load()}catch(_){}}
 const evtxt=e=>{const n=id=>id?esc(P(id).n):'';return {gol:`⚽ <b>Gol de ${n(e.pl)}</b>${e.asis?` <span class="sub">(asist. ${n(e.asis)})</span>`:''}`,enc:`🥅 Gol del rival${e.pl?` <span class="sub">(portero: ${n(e.pl)})</span>`:''}`,parada:`🧤 Parada de ${n(e.pl)}`,cambio:`🔄 Entra ${n(e.entra)}, sale ${n(e.sale)}`,ama:`🟨 Amarilla a ${n(e.pl)}`,roja:`🟥 Roja a ${n(e.pl)}`}[e.t]};
 const clk=m=>{const s=Math.floor(secs(m));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')};
 function sheet(m,on,bench){const sh=V.sh,onl=Object.keys(on).map(Number);
@@ -613,9 +627,13 @@ const ACT={
  clipmark:v=>{const [a,b]=v.split(':');V.clip={mid:+a,i:+b,mode:'mark'};render(true)},
  clipedit:()=>{V.clip={...V.clip,mode:'mark',v:undefined,t:undefined};render(true)},
  clipx:(v,el,e)=>{if(e.target===el){V.clip=null;render(true)}},
- clipv:v=>{const cv=document.getElementById('clipv');V.clip.v=+v;V.clip.t=0;render(true)},
+ clipv:v=>{V.clip.v=+v;V.clip.t=0;render(true)},
  seek:v=>{const cv=document.getElementById('clipv');if(cv)cv.currentTime=Math.max(0,cv.currentTime+ +v)},
- mark:()=>{const cv=document.getElementById('clipv'),C=V.clip,m=M(C.mid),e=m.ev[C.i];if(!cv)return;e.v=C.v??e.v??0;e.ts=Math.round(cv.currentTime);W.match(m);toast('Momento guardado: '+fmt(e.ts));V.clip={mid:C.mid,i:C.i,mode:'view'};render(true)},
+ mark:()=>{const C=V.clip,m=M(C.mid),e=m.ev[C.i],mm=+val('cmm')||0,ss=+val('css')||0,err=t=>{const x=document.getElementById('clerr');if(x)x.textContent=t};if(ss>59)return err('Los segundos van de 0 a 59.');const t=mm*60+ss,cv=document.getElementById('clipv');
+  if(cv&&cv.duration&&t>cv.duration)return err('Ese momento es más largo que el vídeo ('+fmt(cv.duration)+').');e.v=C.v??e.v??0;e.ts=t;W.match(m);toast('Guardado: gol en el '+fmt(t));V.clip={mid:C.mid,i:C.i,mode:'view'};render(true)},
+ clipuse:()=>{const cv=document.getElementById('clipv');if(!cv)return;const t=Math.round(cv.currentTime);document.getElementById('cmm').value=Math.floor(t/60);document.getElementById('css').value=String(t%60).padStart(2,'0');toast('Momento copiado: '+fmt(t))},
+ clippp:()=>{const cv=document.getElementById('clipv');if(!cv)return;if(cv.paused)cv.play().catch(()=>{});else cv.pause()},
+ clipprev:()=>{const cv=document.getElementById('clipv');if(!cv)return;const t=(+val('cmm')||0)*60+(+val('css')||0);V.clip.stop=t+POST;cv.currentTime=Math.max(0,t-PRE);cv.play().catch(()=>{})},
  unmark:()=>{const C=V.clip,m=M(C.mid),e=m.ev[C.i];delete e.ts;delete e.v;W.match(m);V.clip=null;render(true)},
  replay:()=>{const cv=document.getElementById('clipv'),C=V.clip,e=M(C.mid).ev[C.i];if(!cv)return;cv.currentTime=Math.max(0,e.ts-PRE);C.stop=e.ts+POST;cv.play().catch(()=>{})},
  cont:()=>{const cv=document.getElementById('clipv');V.clip.stop=null;cv&&cv.play().catch(()=>{})},
