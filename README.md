@@ -45,6 +45,8 @@ En **Authentication → URL Configuration**:
 Así los enlaces de "confirmar email" y "recuperar contraseña" vuelven a la app.
 
 ### 5. Administradores
+Todo se gestiona en **Perfil → ⚙️ Administración**: solicitudes de acceso, usuarios (rol, cargo, jugador vinculado, dar o quitar administrador, quitar acceso), cuerpo técnico, plantilla y partidos (crear, editar datos y goles).
+
 Si no hay ningún administrador, el primer **entrenador** que se registra queda aprobado automáticamente. Cualquier miembro aprobado puede pasar a ser administrador desde **Perfil → Miembros del equipo → Hacer administrador**. Las solicitudes se validan en **Perfil → Solicitudes de acceso**, eligiendo a qué jugador se vincula cada familia.
 
 ### 6. Invitar a los padres
