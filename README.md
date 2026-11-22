@@ -2,9 +2,11 @@
 
 App del equipo **Estrellitas** del Colegio San José: partidos en directo, estadísticas de cada jugador, entrenamientos y vídeos de los partidos. Se instala en el móvil desde el navegador (iPhone y Android), sin App Store.
 
-- **Entrenador:** apunta los partidos en directo (goles, asistencias, paradas, cambios, tarjetas), valora a los jugadores, pasa lista en los entrenamientos, sube los enlaces de los vídeos y aprueba quién entra en la app.
-- **Padres y jugadores:** ven el marcador en directo, las estadísticas del equipo, la ficha de su hijo (o la suya) y los vídeos.
-- **Privacidad:** las valoraciones del entrenador y los datos de contacto de las familias solo los ve el entrenador. Nadie entra sin que el entrenador apruebe su alta. El número del DNI se comprueba pero **no se guarda**.
+- **Administrador y entrenador:** validan las altas (y vinculan a cada familia con su hijo), apuntan los partidos en directo, valoran a los jugadores, pasan lista, publican vídeos y fotos, y aprueban lo que suben las familias.
+- **Familias:** ven el marcador en directo, las estadísticas del equipo, la ficha de su hijo y los partidos grabados, y pueden subir fotos y vídeos cortos (se publican cuando un administrador los aprueba).
+- **Privacidad:** el registro no pide DNI. Las valoraciones y los datos de contacto solo los ven los administradores. Nadie entra sin que un administrador valide su alta. Fotos y vídeos se guardan en un almacenamiento privado: solo los ven los miembros aprobados.
+
+**Límites del plan gratis de Supabase:** 1 GB de almacenamiento, archivos de hasta 50 MB y 5 GB de descargas al mes. Las fotos se reducen automáticamente antes de subirlas. Los partidos completos se comparten con un enlace (iCloud, Drive…) desde la ficha del partido.
 
 Sin configurar nada, la app funciona en **modo prueba**: los datos se guardan solo en el móvil donde se abre.
 
@@ -42,11 +44,11 @@ En **Authentication → URL Configuration**:
 
 Así los enlaces de "confirmar email" y "recuperar contraseña" vuelven a la app.
 
-### 5. Darte de alta como entrenador
-Abre la app, pulsa **Registrarse**, confirma el email y elige **Entrenador**. **El primer entrenador que se registra queda aprobado automáticamente.** Todos los demás (incluidos otros entrenadores) los apruebas tú desde **Perfil → Solicitudes de acceso**.
+### 5. Administradores
+Si no hay ningún administrador, el primer **entrenador** que se registra queda aprobado automáticamente. Cualquier miembro aprobado puede pasar a ser administrador desde **Perfil → Miembros del equipo → Hacer administrador**. Las solicitudes se validan en **Perfil → Solicitudes de acceso**, eligiendo a qué jugador se vincula cada familia.
 
 ### 6. Invitar a los padres
-Manda el enlace por el grupo de WhatsApp. Cada padre se registra, elige "Familiar de jugador" y a su hijo, y tú lo apruebas.
+Manda el enlace por el grupo de WhatsApp. Cada padre se registra, elige "Familiar de jugador" y escribe el nombre de su hijo; el administrador lo valida.
 
 **Instalarla en el iPhone:** abrir el enlace en **Safari → botón Compartir → Añadir a pantalla de inicio**.
 **En Android:** Chrome → menú ⋮ → **Instalar app** / **Añadir a pantalla de inicio**.

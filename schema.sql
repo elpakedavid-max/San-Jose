@@ -17,10 +17,12 @@ create table if not exists public.profiles (
   cat         text,
   pid         bigint,
   rel         text,
-  dt          text,                    -- tipo de documento (el número NO se guarda)
+  dt          text,                    -- (sin uso: ya no se pide documento)
   img         boolean not null default false,  -- permiso de imagen
   avisos      boolean not null default true,
+  hijo        text,                    -- nombre del hijo/a que indica la familia al registrarse
   approved    boolean not null default false,
+  admin       boolean not null default false,  -- administrador del programa (valida altas)
   created_at  timestamptz not null default now()
 );
 
@@ -74,20 +76,26 @@ $$;
 
 create or replace function public.is_staff() returns boolean
 language sql stable security definer set search_path = public as $$
-  select exists (select 1 from profiles where id = auth.uid() and approved and role = 'entrenador');
+  select exists (select 1 from profiles where id = auth.uid() and approved and (role = 'entrenador' or admin));
 $$;
 
--- Nadie se aprueba a sí mismo. El primer entrenador que se registra queda
--- aprobado automáticamente; a partir de ahí, él aprueba al resto.
+-- Nadie se aprueba a sí mismo. Si no hay ningún entrenador ni administrador, el primer
+-- entrenador que se registra queda aprobado; a partir de ahí, los administradores aprueban.
+-- Para nombrar administrador desde el panel: update profiles set admin = true, approved = true where email = '...';
 create or replace function public.profiles_guard() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
+  if auth.uid() is null then          -- cambios hechos desde el panel de Supabase
+    return new;
+  end if;
   if tg_op = 'INSERT' then
+    new.admin := false;
     new.approved := (new.role = 'entrenador'
-      and not exists (select 1 from profiles where approved and role = 'entrenador'));
+      and not exists (select 1 from profiles where approved and (role = 'entrenador' or admin)));
   elsif not public.is_staff() then
     new.approved := old.approved;
     new.role := old.role;
+    new.admin := old.admin;
   end if;
   return new;
 end $$;
@@ -142,13 +150,72 @@ grant execute on function public.is_member(), public.is_staff() to authenticated
 do $$
 declare t text;
 begin
-  foreach t in array array['profiles','players','matches','ratings','trainings','settings'] loop
+  foreach t in array array['profiles','players','matches','ratings','trainings','settings','media'] loop
     if not exists (select 1 from pg_publication_tables
                    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
       execute format('alter publication supabase_realtime add table public.%I', t);
     end if;
   end loop;
 end $$;
+
+-- ---------- Fotos y vídeos ----------
+create table if not exists public.media (
+  id            bigint primary key,
+  path          text not null,
+  thumb         text,
+  kind          text not null check (kind in ('foto','video')),
+  match_id      bigint references public.matches on delete set null,
+  caption       text,
+  uploader      uuid default auth.uid() references auth.users on delete set null,
+  uploader_name text,
+  approved      boolean not null default false,   -- lo de las familias espera a que lo apruebe un administrador
+  created_at    timestamptz not null default now()
+);
+alter table public.media enable row level security;
+
+create or replace function public.media_guard() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if tg_op = 'INSERT' then
+    new.uploader := auth.uid();
+    new.approved := public.is_staff();
+    new.created_at := now();
+  elsif not public.is_staff() then
+    new.approved := old.approved;
+    new.uploader := old.uploader;
+  end if;
+  return new;
+end $$;
+drop trigger if exists media_guard on public.media;
+create trigger media_guard before insert or update on public.media
+  for each row execute function public.media_guard();
+
+drop policy if exists "ver media" on public.media;
+create policy "ver media" on public.media for select
+  using (public.is_staff() or (public.is_member() and (approved or uploader = auth.uid())));
+drop policy if exists "subir media" on public.media;
+create policy "subir media" on public.media for insert with check (public.is_member());
+drop policy if exists "editar media" on public.media;
+create policy "editar media" on public.media for update using (public.is_staff() or uploader = auth.uid());
+drop policy if exists "borrar media" on public.media;
+create policy "borrar media" on public.media for delete using (public.is_staff() or uploader = auth.uid());
+grant select, insert, update, delete on public.media to authenticated;
+revoke all on public.media from anon;
+revoke execute on function public.media_guard() from public, anon, authenticated;
+
+-- Almacenamiento privado (máx. 50 MB por archivo: límite del plan gratis)
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('media', 'media', false, 52428800, array['image/*','video/*'])
+on conflict (id) do update set public = false, file_size_limit = 52428800, allowed_mime_types = array['image/*','video/*'];
+drop policy if exists "sj media leer" on storage.objects;
+create policy "sj media leer" on storage.objects for select to authenticated
+  using (bucket_id = 'media' and public.is_member());
+drop policy if exists "sj media subir" on storage.objects;
+create policy "sj media subir" on storage.objects for insert to authenticated
+  with check (bucket_id = 'media' and public.is_member() and (storage.foldername(name))[1] = auth.uid()::text);
+drop policy if exists "sj media borrar" on storage.objects;
+create policy "sj media borrar" on storage.objects for delete to authenticated
+  using (bucket_id = 'media' and (public.is_staff() or owner_id = auth.uid()::text));
 
 -- ---------- Plantilla inicial · Estrellitas ----------
 insert into public.players (id, n, p, dem, pie, cual) values
