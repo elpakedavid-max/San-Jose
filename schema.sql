@@ -134,6 +134,8 @@ create policy "solo entrenador" on public.ratings
 
 revoke all on all tables in schema public from anon;
 grant select, insert, update, delete on all tables in schema public to authenticated;
+revoke execute on function public.is_member(), public.is_staff(), public.profiles_guard() from public, anon;
+revoke execute on function public.profiles_guard() from authenticated;
 grant execute on function public.is_member(), public.is_staff() to authenticated;
 
 -- ---------- Tiempo real (marcador en directo) ----------
