@@ -60,6 +60,7 @@ a,.link{color:var(--pri);font-weight:600;cursor:pointer;text-decoration:underlin
 .chip.on{background:var(--pri);color:#fff;border-color:var(--pri)}
 .chk{display:flex;gap:12px;align-items:flex-start;margin:12px 0;font-size:15px}.chk input{width:22px;height:22px;flex:none;margin-top:2px}
 .appbar{position:sticky;top:0;z-index:5;background:var(--pri2);border-bottom:3px solid var(--gold);color:#fff;display:flex;align-items:center;gap:10px;padding:10px 16px}
+.appbar select.season{width:auto;flex:none;background:rgba(255,255,255,.14);color:#fff;border:1px solid rgba(255,255,255,.35);padding:6px 8px;font:600 14px Inter;border-radius:10px}.appbar select.season option{color:#111}
 .appbar .lg{width:38px;height:38px;border-radius:10px;background:#fff;display:grid;place-items:center}.appbar .lg img{width:32px;height:32px}.appbar b{font:700 22px 'Barlow Condensed';flex:1}
 .av{width:36px;height:36px;border-radius:50%;background:#fff;color:var(--pri2);display:grid;place-items:center;font-weight:700;font-size:14px}
 .tabs{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:480px;display:grid;grid-template-columns:repeat(6,1fr);background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:6}
@@ -128,9 +129,11 @@ const save=()=>{try{localStorage.setItem(K,JSON.stringify(S))}catch(e){}};
 const CFG=window.SJ_CONFIG||{};
 const REMOTE=!!(CFG.supabaseUrl&&CFG.supabaseKey&&window.supabase);
 let sb=null,session=null,chan=null,rtT=null;
-if(REMOTE)S={players:[],matches:[],trainings:[],folder:'',people:[],media:[],user:null};
+if(REMOTE){S={allP:[],allM:[],allT:[],folder:'',people:[],media:[],seasons:[],season:'',user:null};
+ const sz=x=>(x.season||S.season)===V.season;
+ Object.defineProperties(S,{players:{get(){return this.allP.filter(p=>(p.seasons||[]).includes(V.season))},set(v){this.allP=v}},matches:{get(){return this.allM.filter(sz)},set(v){this.allM=v}},trainings:{get(){return this.allT.filter(sz)},set(v){this.allT=v}}});}
 const nid=()=>Date.now()*100+Math.floor(Math.random()*100);
-const MCOLS=['id','rival','fecha','local','dur','estado','tit','ev','acc','run','video'],PCOLS=['id','n','p','d','dem','pie','cual'],UCOLS=['nombre','apellidos','nac','tel','email','role','cargo','cat','pid','rel','hijo','img','avisos'];
+const MCOLS=['id','rival','fecha','local','dur','estado','tit','ev','acc','run','video','season'],PCOLS=['id','n','p','d','dem','pie','cual','seasons'],UCOLS=['nombre','apellidos','nac','tel','email','role','cargo','cat','pid','rel','hijo','img','avisos'];
 const pick=(o,ks)=>Object.fromEntries(ks.map(k=>[k,o[k]===undefined||o[k]===''?null:o[k]]));
 const authErr=m=>{m=String(m||'');if(/rate limit/i.test(m))return 'Ahora mismo hay muchos registros a la vez. Espera unos minutos y vuelve a intentarlo.';if(/already registered|already exists/i.test(m))return 'Ese email ya tiene cuenta. Pulsa «Ya tengo cuenta» para entrar.';if(/password/i.test(m)&&/(short|weak|least)/i.test(m))return 'La contraseña es demasiado corta o sencilla.';if(/invalid.*email|email.*invalid/i.test(m))return 'Revisa el email.';return m};
 function toast(t){let e=document.getElementById('toast');if(!e){e=document.createElement('div');e.id='toast';document.body.appendChild(e)}e.textContent=t;e.className='on';clearTimeout(e._t);e._t=setTimeout(()=>e.className='',4500)}
@@ -141,18 +144,21 @@ const W=REMOTE?{
  match:m=>q(sb.from('matches').upsert(pick(m,MCOLS))),
  delMatch:id=>q(sb.from('matches').delete().eq('id',id)),
  rating:(mid,pid,n)=>q(n?sb.from('ratings').upsert({match_id:mid,player_id:pid,nota:n}):sb.from('ratings').delete().eq('match_id',mid).eq('player_id',pid)),
- training:t=>q(sb.from('trainings').insert({id:t.id,fecha:t.fecha,pr:t.pr})),
+ training:t=>q(sb.from('trainings').insert({id:t.id,fecha:t.fecha,pr:t.pr,season:t.season||null})),
  setting:(k,v)=>q(sb.from('settings').upsert({key:k,value:v})),
 }:{player:save,delPlayer:save,match:save,delMatch:save,rating:save,training:save,setting:(k,v)=>{S[k]=k==='staff'?JSON.parse(v):v;save()}};
 async function loadAll(){
  const st=coach(),none={data:[]};
  const [pl,ma,tr,se,ra,pe]=await Promise.all([sb.from('players').select('*').order('id'),sb.from('matches').select('*'),sb.from('trainings').select('*').order('fecha'),sb.from('settings').select('*'),st?sb.from('ratings').select('*'):none,st?sb.from('profiles').select('*').order('created_at'):none]);
  const e=[pl,ma,tr,se].find(r=>r.error);if(e){toast('Error al cargar los datos: '+e.error.message);return}
- S.players=pl.data.map(x=>({...x,d:x.d??'',dem:x.dem||'',pie:x.pie||'',cual:x.cual||''}));
+ S.players=pl.data.map(x=>({...x,d:x.d??'',dem:x.dem||'',pie:x.pie||'',cual:x.cual||'',seasons:x.seasons||[]}));
  S.matches=ma.data.map(m=>({...m,tit:(m.tit||[]).map(Number),ev:m.ev||[],acc:+m.acc||0,run:m.run?+m.run:null,video:m.video||'',val:{}}));
- for(const r of ra.data||[]){const m=S.matches.find(x=>x.id==r.match_id);if(m)m.val[r.player_id]=r.nota}
+ for(const r of ra.data||[]){const m=S.allM.find(x=>x.id==r.match_id);if(m)m.val[r.player_id]=r.nota}
  S.trainings=tr.data.map(t=>({...t,pr:(t.pr||[]).map(Number)}));
  S.folder=(se.data.find(x=>x.key==='folder')||{}).value||'';
+ try{S.seasons=JSON.parse((se.data.find(x=>x.key==='seasons')||{}).value||'[]')}catch(e){S.seasons=[]}
+ S.season=(se.data.find(x=>x.key==='season')||{}).value||S.seasons[S.seasons.length-1]||'2026/27';if(!S.seasons.includes(S.season))S.seasons.push(S.season);
+ if(!V.season||!S.seasons.includes(V.season)){let ls=null;try{ls=localStorage.getItem('sj_season')}catch(e){}V.season=S.seasons.includes(ls)?ls:S.season}
  try{S.staff=JSON.parse((se.data.find(x=>x.key==='staff')||{}).value||'[]')}catch(e){S.staff=[]}
  S.people=pe.data||[];
  await loadMedia();
@@ -182,8 +188,8 @@ async function refresh(){if(!session||!S.user)return;if(!S.user.approved)return 
  if(!['reg','pedit','newm','lineup','lista','medit'].includes(V.view)&&!V.sh&&!V.mv&&!V.clip&&!V.uploading&&!document.activeElement?.matches('input,select'))render(true)}
 const V={view:REMOTE?'loading':S.user?'app':'login',tab:'inicio',reg:{},step:1,rank:'gol',cmp:[1,2]};
 const app=document.getElementById('app');
-const P=id=>S.players.find(p=>p.id==id)||{id,n:'Jugador borrado',p:'MED',d:'–'};
-const M=id=>S.matches.find(m=>m.id==id);
+const P=id=>(S.allP||S.players).find(p=>p.id==id)||{id,n:'Jugador borrado',p:'MED',d:'–'};
+const M=id=>(S.allM||S.matches).find(m=>m.id==id);
 const coach=()=>!!S.user&&(S.user.role==='entrenador'||!!S.user.admin);
 const fdate=d=>new Date(d+'T12:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'});
 const tag=p=>p.d?p.d:esc((p.n||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase());
@@ -242,9 +248,13 @@ admin:()=>{if(!coach())return head('Administración','app')+'<div class="pad"><p
  <label for="st">Teléfono (opcional, lo verán las familias)</label><input id="st" type="tel" value="${esc(e.t||'')}"><p class="err" id="err"></p>
  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn sm" data-act="stsave">Guardar</button><button class="btn ghost sm" data-act="stedit" data-v="">Cancelar</button></div>${V.ste>=0?`<button class="link" data-act="stdel">${V.stdel?'¿Seguro? Pulsa otra vez':'Quitar del cuerpo técnico'}</button>`:''}`
  :'<button class="btn sm" data-act="stedit" data-v="-1">+ Añadir miembro</button>'}</div>
- <div class="card"><h3>👕 Plantilla (${S.players.length})</h3><p class="sub">Añade, edita o quita jugadores.</p>${[...S.players].sort((a,b)=>a.n.localeCompare(b.n)).map(p=>`<div class="row"><span class="dor">${tag(p)}</span><span class="grow">${esc(p.n)}<div class="sub">${esc(p.dem||POS[p.p])}</div></span><button class="link" data-act="pedit" data-v="${p.id}">Editar</button></div>`).join('')}
- <button class="btn sm" data-act="pedit" data-v="0">+ Añadir jugador</button></div>
- <div class="card"><h3>📅 Partidos (${ms.length})</h3>${ms.length?'<p class="sub">Cambia la fecha aquí mismo; se guarda sola.</p>':''}${ms.map(m=>`<div class="row" style="flex-wrap:wrap"><span class="grow"><b>${esc(m.rival)}</b><div class="sub">${m.local?'En casa':'Fuera'} · ${m.estado==='prox'?'Por jugar':gf(m)+'–'+gc(m)}</div></span><input type="date" value="${esc(m.fecha)}" data-chg="mdate" data-v="${m.id}" aria-label="Fecha del partido contra ${esc(m.rival)}" style="width:auto;padding:8px 10px"><button class="link" data-act="medit" data-v="${m.id}">Editar</button></div>`).join('')||'<p class="sub">Aún no hay partidos.</p>'}
+ ${REMOTE?`<div class="card"><h3>📆 Temporadas</h3><p class="sub">Elige la temporada arriba, en la barra azul: los partidos, fotos, entrenamientos y jugadores que añadas irán a esa temporada.</p>
+ ${S.seasons.map(x=>`<div class="row"><span class="grow"><b>${esc(x)}</b>${x===S.season?' <span class="sub">· la que ven por defecto</span>':''}<div class="sub">${S.allM.filter(m=>(m.season||S.season)===x).length} partidos · ${S.allP.filter(p=>(p.seasons||[]).includes(x)).length} jugadores</div></span>${x!==S.season?`<button class="link" data-act="sdef" data-v="${esc(x)}">Poner por defecto</button>`:''}</div>`).join('')}
+ <label for="nsz">Nueva temporada</label><div style="display:flex;gap:8px"><input id="nsz" placeholder="Ej.: 2025/26"><button class="btn sm" style="width:auto;padding:0 16px;margin:0" data-act="sadd">Añadir</button></div><p class="err" id="err"></p></div>`:''}
+ <div class="card"><h3>👕 Plantilla ${REMOTE?esc(V.season):''} (${S.players.length})</h3><p class="sub">Añade, edita o quita jugadores de esta temporada.</p>${[...S.players].sort((a,b)=>a.n.localeCompare(b.n)).map(p=>`<div class="row"><span class="dor">${tag(p)}</span><span class="grow">${esc(p.n)}<div class="sub">${esc(p.dem||POS[p.p])}</div></span><button class="link" data-act="pedit" data-v="${p.id}">Editar</button></div>`).join('')}
+ <button class="btn sm" data-act="pedit" data-v="0">+ Añadir jugador nuevo</button>
+ ${REMOTE&&S.allP.some(p=>!(p.seasons||[]).includes(V.season))?`<label for="pold">Añadir de otra temporada</label><div style="display:flex;gap:8px"><select id="pold">${S.allP.filter(p=>!(p.seasons||[]).includes(V.season)).map(p=>`<option value="${p.id}">${esc(p.n)} (${esc((p.seasons||[]).join(', '))})</option>`).join('')}</select><button class="btn sm" style="width:auto;padding:0 16px;margin:0" data-act="padd">Añadir</button></div><button class="link" data-act="paddall">Añadir a todos los de ${esc(S.seasons[S.seasons.indexOf(V.season)-1]||S.seasons[S.seasons.indexOf(V.season)+1]||'otra temporada')}</button>`:''}</div>
+ <div class="card"><h3>📅 Partidos ${REMOTE?esc(V.season):''} (${ms.length})</h3>${ms.length?'<p class="sub">Cambia la fecha aquí mismo; se guarda sola.</p>':''}${ms.map(m=>`<div class="row" style="flex-wrap:wrap"><span class="grow"><b>${esc(m.rival)}</b><div class="sub">${m.local?'En casa':'Fuera'} · ${m.estado==='prox'?'Por jugar':gf(m)+'–'+gc(m)}</div></span><input type="date" value="${esc(m.fecha)}" data-chg="mdate" data-v="${m.id}" aria-label="Fecha del partido contra ${esc(m.rival)}" style="width:auto;padding:8px 10px"><button class="link" data-act="medit" data-v="${m.id}">Editar</button></div>`).join('')||'<p class="sub">Aún no hay partidos.</p>'}
  <button class="btn sm" data-act="newm">+ Nuevo partido</button></div></div>`},
 medit:()=>{const m=M(V.mid);if(!m)return views.admin();const et=V.et||'gol',opt=(sel,none)=>`${none?`<option value="0">${none}</option>`:''}${S.players.map(p=>`<option value="${p.id}" ${p.id==sel?'selected':''}>${esc(p.n)}</option>`).join('')}`;
  return head('Editar partido','match')+`<div class="pad" style="padding-top:0"><h1>${esc(m.rival)} · ${gf(m)}–${gc(m)}</h1>
@@ -327,7 +337,7 @@ reg:()=>{const r=V.reg,st=STEPS[V.step-1],R=r.role;
 /* ---------- app ---------- */
 app:()=>{const t=V.tab,c=coach();
  const tabs=[['inicio','Inicio','home'],['partidos','Partidos','ball'],['galeria','Galería','img'],['plantilla',!c&&S.user.pid?'Mi ficha':'Plantilla','team'],['stats','Estadísticas','stats'],['perfil','Perfil','user']];
- return `<div class="appbar"><span class="lg"><img src="${LOGO}" alt=""></span><b>${{inicio:'San José',partidos:'Partidos',galeria:'Fotos y vídeos',plantilla:!c&&S.user.pid?'Mi ficha':'Plantilla',stats:'Estadísticas',perfil:'Mi perfil'}[t]}</b><span class="av">${ini(S.user)}</span></div>
+ return `<div class="appbar"><span class="lg"><img src="${LOGO}" alt=""></span><b>${{inicio:'San José',partidos:'Partidos',galeria:'Fotos y vídeos',plantilla:!c&&S.user.pid?'Mi ficha':'Plantilla',stats:'Estadísticas',perfil:'Mi perfil'}[t]}</b>${REMOTE&&S.seasons.length?`<select class="season" data-chg="season" aria-label="Temporada">${S.seasons.map(x=>`<option ${x===V.season?'selected':''}>${esc(x)}</option>`).join('')}</select>`:''}<span class="av">${ini(S.user)}</span></div>
  <div class="pad">${tabv[t]()}</div><nav class="tabs">${tabs.map(([k,l,i])=>`<button class="${k===t?'on':''}" data-act="tab" data-v="${k}">${ico(i)}${l}</button>`).join('')}</nav>${V.mv?mviewer():''}`;},
 player:()=>{const p=P(V.pid),s=pstats(p.id),c=coach(),gk=p.p==='POR',mx=Math.max(90,...s.per.map(r=>r.min));
  return head('',V.from||'app')+`<div class="pad" style="padding-top:0"><div style="display:flex;gap:14px;align-items:center">${p.d?`<div class="num" style="font-size:72px;line-height:.9;color:var(--pri)">${p.d}</div>`:''}<div><h1>${esc(p.n)}</h1><div class="sub">${esc(p.dem||POS[p.p])}${p.pie?' · '+esc(p.pie):''}</div></div></div>
@@ -383,6 +393,7 @@ pedit:()=>{const p=V.pid?P(V.pid):{n:'',p:'MED',d:'',dem:'',pie:'',cual:''};retu
  <label for="pdm">Posición exacta</label><input id="pdm" value="${esc(p.dem)}" placeholder="Lateral izquierdo, mediocentro, extremo…">
  <label for="ppi">Pie</label><select id="ppi">${['','Diestro','Zurdo','Ambidiestro'].map(o=>`<option value="${o}" ${p.pie===o?'selected':''}>${o||'Sin indicar'}</option>`).join('')}</select>
  <label for="pc">Cualidades</label><input id="pc" value="${esc(p.cual)}" placeholder="Rápido, buena pegada…">
+ ${REMOTE&&S.seasons.length?`<label>Temporadas en las que juega</label>${S.seasons.map((x,k)=>`<label class="chk" style="margin:6px 0"><input type="checkbox" id="pse-${k}" ${(V.pid?(p.seasons||[]):[V.season]).includes(x)?'checked':''}><span>${esc(x)}</span></label>`).join('')}`:''}
  <p class="err" id="err"></p><button class="btn" data-act="psave">Guardar</button>
  ${V.pid?`<button class="btn ghost sm" data-act="pdel">${V.pdel?'Pulsa otra vez para quitarlo de la plantilla':'Quitar de la plantilla'}</button>`:''}</div>`},
 newm:()=>head('Nuevo partido','app')+`<div class="pad" style="padding-top:0"><h1>Nuevo partido</h1><label for="nr">Rival</label><input id="nr" placeholder="Nombre del equipo rival"><label for="nf">Fecha</label><input id="nf" type="date" value="${new Date().toISOString().slice(0,10)}">
@@ -417,7 +428,7 @@ async function uploadFiles(files){
     r=await sb.storage.from('media').upload(base+'_t.jpg',sm,{contentType:'image/jpeg'});if(!r.error)thumb=base+'_t.jpg'}
    else{const ext=((f.name.split('.').pop()||'mp4').toLowerCase().replace(/[^a-z0-9]/g,''))||'mp4';path=`${base}.${ext}`;
     const r=await sb.storage.from('media').upload(path,f,{contentType:f.type||'video/mp4'});if(r.error)throw r.error}
-   const {error}=await sb.from('media').insert({id,path,thumb,kind:isV?'video':'foto',match_id:mid?+mid:null,caption:cap||null,uploader_name:S.user.nombre+' '+S.user.apellidos});
+   const {error}=await sb.from('media').insert({id,path,thumb,kind:isV?'video':'foto',season:(mid&&M(mid)?.season)||V.season,match_id:mid?+mid:null,caption:cap||null,uploader_name:S.user.nombre+' '+S.user.apellidos});
    if(error){sb.storage.from('media').remove([path,thumb].filter(Boolean));throw error}ok++;
   }catch(e){toast('No se ha podido subir '+f.name+': '+(e.message||e))}
  }
@@ -470,7 +481,7 @@ function sheet(m,on,bench){const sh=V.sh,onl=Object.keys(on).map(Number);
 const tabv={
 galeria:()=>{if(!REMOTE)return '<div class="card"><h3>Fotos y vídeos</h3><p class="sub">La galería funciona en la versión conectada de la app.</p></div>';
  const c=coach(),f=V.gm||'',ms=[...S.matches].sort((a,b)=>b.fecha.localeCompare(a.fecha)),mopt=sel=>ms.map(m=>`<option value="${m.id}" ${sel==m.id?'selected':''}>${fdate(m.fecha)} · ${esc(m.rival)}</option>`).join('');
- const list=S.media.filter(x=>x.approved&&(!f||x.match_id==f)),pend=S.media.filter(x=>!x.approved),mine=pend.filter(x=>x.uploader===session.user.id);
+ const inSz=x=>(x.season||(x.match_id&&M(x.match_id)?.season)||S.season)===V.season,list=S.media.filter(x=>x.approved&&inSz(x)&&(!f||x.match_id==f)),pend=S.media.filter(x=>!x.approved),mine=pend.filter(x=>x.uploader===session.user.id);
  return `<div class="card"><h3>Subir fotos o vídeos</h3><p class="sub">Vídeos de hasta 50 MB (unos 20–30 segundos grabados con el móvil). Para un partido entero, usa el enlace de vídeo del partido.</p>
  <label for="um">Partido (opcional)</label><select id="um"><option value="">Sin partido</option>${mopt(V.gm)}</select>
  <label for="uc">Comentario (opcional)</label><input id="uc" maxlength="140" placeholder="Ej.: gol de Nico">
@@ -567,21 +578,22 @@ const ACT={
  noop:()=>{},
  undo:()=>{const m=M(V.mid);m.ev.pop();W.match(m);render()},
  fin:()=>{if(!V.fin){V.fin=1;return render()}const m=M(V.mid);m.acc=secs(m);m.run=null;const cm=cur(m);if(cm>0&&cm<m.dur)m.dur=Math.max(cm,...m.ev.map(e=>e.min));m.estado='fin';V.fin=null;W.match(m);V.view='match';render()},
- delm:v=>{if(V.delm!==+v){V.delm=+v;return render()}S.matches=S.matches.filter(m=>m.id!=v);V.delm=null;W.delMatch(+v);V.view='app';V.tab='partidos';render()},
+ delm:v=>{if(V.delm!==+v){V.delm=+v;return render()}if(S.allM)S.allM=S.allM.filter(m=>m.id!=v);else S.matches=S.matches.filter(m=>m.id!=v);V.delm=null;W.delMatch(+v);V.view='app';V.tab='partidos';render()},
  lista:()=>{V.sel=S.players.map(p=>p.id);V.view='lista';render()},
  lsel:v=>{v=+v;V.sel=V.sel.includes(v)?V.sel.filter(x=>x!==v):[...V.sel,v];const y=scrollY;render();scrollTo(0,y)},
- lsave:()=>{const t={id:nid(),fecha:val('fl'),pr:[...V.sel]};S.trainings.push(t);W.training(t);V.view='app';V.tab='inicio';render()},
+ lsave:()=>{const t={id:nid(),fecha:val('fl'),pr:[...V.sel],season:V.season};(S.allT||S.trainings).push(t);W.training(t);V.view='app';V.tab='inicio';render()},
  pedit:v=>{V.pid=+v;V.pdel=null;V.view='pedit';render()},
  psave:()=>{const n=val('pn'),d=val('pd')?+val('pd'):'';if(!n)return err('Escribe el nombre.');if(d!==''&&!(d>=1&&d<=99))return err('Pon un dorsal entre 1 y 99, o déjalo vacío.');if(d!==''&&S.players.some(x=>x.d===d&&x.id!==V.pid))return err('Ese dorsal ya lo tiene '+S.players.find(x=>x.d===d).n+'.');
-  let p=V.pid&&S.players.find(x=>x.id===V.pid);if(!p){p={id:REMOTE?nid():Math.max(0,...S.players.map(x=>x.id))+1};S.players.push(p);V.pid=p.id}
+  let p=V.pid&&P(V.pid).n!=='Jugador borrado'&&P(V.pid);if(!p){p={id:REMOTE?nid():Math.max(0,...S.players.map(x=>x.id))+1,seasons:V.season?[V.season]:[]};(S.allP||S.players).push(p);V.pid=p.id}
+  if(REMOTE){const ch=(S.seasons||[]).filter((x,k)=>document.getElementById('pse-'+k)?.checked);p.seasons=ch.length?ch:[V.season]}
   Object.assign(p,{n,d,p:val('pp'),dem:val('pdm'),pie:val('ppi'),cual:val('pc')});W.player(p);V.from='app';V.view='player';render()},
- pdel:()=>{if(!V.pdel){V.pdel=1;return render()}S.players=S.players.filter(x=>x.id!==V.pid);V.pdel=null;W.delPlayer(V.pid);V.view='app';V.tab='plantilla';render()},
+ pdel:()=>{if(!V.pdel){V.pdel=1;return render()}if(S.allP)S.allP=S.allP.filter(x=>x.id!==V.pid);else S.players=S.players.filter(x=>x.id!==V.pid);V.pdel=null;W.delPlayer(V.pid);V.view='app';V.tab='plantilla';render()},
  vsave:()=>{const L=[];for(let k=0;document.getElementById('vu-'+k);k++){const u=val('vu-'+k),t=val('vl-'+k);if(!u)continue;if(!okUrl(u))return err('El enlace de «'+(t||'vídeo '+(k+1))+'» debe empezar por https://');L.push({t:t||'Vídeo '+(L.length+1),u})}
   const m=M(V.mid);m.video=L.length?JSON.stringify(L):'';W.match(m);render(true)},
  fsave:()=>{const u=val('fu'),e=document.getElementById('err2');if(u&&!okUrl(u)){e.textContent='Pega un enlace que empiece por https://';return}S.folder=u;W.setting('folder',u);render()},
  newm:()=>{V.loc=1;V.view='newm';render()},
  loc:v=>{V.loc=+v;const r=val('nr'),f=val('nf');render();document.getElementById('nr').value=r;document.getElementById('nf').value=f},
- mksave:()=>{const r=val('nr'),f=val('nf');if(!r)return err('Escribe el nombre del rival.');const id=REMOTE?nid():Math.max(0,...S.matches.map(m=>m.id))+1,nm={id,rival:r,fecha:f,local:!!V.loc,dur:50,estado:'prox',tit:[],ev:[],acc:0,run:null,video:'',val:{}};S.matches.push(nm);W.match(nm);V.mid=id;V.view='match';render()},
+ mksave:()=>{const r=val('nr'),f=val('nf');if(!r)return err('Escribe el nombre del rival.');const id=REMOTE?nid():Math.max(0,...S.matches.map(m=>m.id))+1,nm={id,season:V.season||null,rival:r,fecha:f,local:!!V.loc,dur:50,estado:'prox',tit:[],ev:[],acc:0,run:null,video:'',val:{}};(S.allM||S.matches).push(nm);W.match(nm);V.mid=id;V.view='match';render()},
  swrole:v=>{if(REMOTE)return;S.user.role=v;if((v==='jugador'||v==='familiar')&&!S.user.pid)S.user.pid=S.players[0]?.id;if(v==='entrenador'&&!S.user.cargo)S.user.cargo='Entrenador';save();render()},
  reset:()=>{if(REMOTE)return;if(!V.reset){V.reset=1;return render()}const u=S.user;S=seed();S.user=u;V.reset=null;save();render()},
  logout:async()=>{if(REMOTE){if(chan){sb.removeChannel(chan);chan=null}await sb.auth.signOut();session=null;S.user=null}V.view='login';V.tab='inicio';V.upmsg=null;V.gm='';V.mv=null;render()},
@@ -614,6 +626,10 @@ const ACT={
  evadd:()=>{const m=M(V.mid),t=V.et||'gol',pl=+val('ep')||null,mn=val('em2');if(t!=='enc'&&!pl)return toast('Elige el jugador.');const e={t,min:mn===''?null:+mn,pl};if(t==='gol')e.asis=+val('ea')||0;m.ev.push(e);if(m.estado==='prox')m.estado='fin';W.match(m);toast('Añadido: '+(t==='gol'?'gol de '+P(pl).n:'acción'));render(true)},
  dbxpick:()=>{if(!(window.Dropbox&&Dropbox.choose)){dbxLoad().catch(()=>{});return toast('Conectando con Dropbox… pulsa otra vez en un momento.')}
   Dropbox.choose({linkType:'preview',multiselect:true,extensions:['video'],success:fs=>{const m=M(V.mid);if(!m)return;const L=vids(m);let n=0;fs.sort((a,b)=>a.name.localeCompare(b.name,'es',{numeric:true})).forEach(f=>{if(!L.some(x=>x.u.split('?')[0]===f.link.split('?')[0])){L.push({t:f.name.replace(/\.[^.]+$/,''),u:f.link});n++}});m.video=JSON.stringify(L);W.match(m);toast(n?`${n} vídeo${n>1?'s':''} añadido${n>1?'s':''}`:'Esos vídeos ya estaban');render(true)}})},
+ sadd:()=>{const x=val('nsz').trim();if(!/^\d{4}\/\d{2}$/.test(x))return err('Escríbela como 2025/26.');if(S.seasons.includes(x))return err('Esa temporada ya existe.');S.seasons=[...S.seasons,x].sort();W.setting('seasons',JSON.stringify(S.seasons));V.season=x;try{localStorage.setItem('sj_season',x)}catch(e){}toast('Temporada '+x+' creada. Ahora estás en ella.');render(true)},
+ sdef:v=>{S.season=v;W.setting('season',v);toast('Por defecto: '+v);render(true)},
+ padd:()=>{const p=P(+val('pold'));if(!p.seasons)return;p.seasons=[...p.seasons,V.season];W.player(p);render(true)},
+ paddall:()=>{const ix=S.seasons.indexOf(V.season),prev=S.seasons[ix-1]||S.seasons[ix+1];if(!prev)return toast('No hay otra temporada.');S.allP.filter(p=>(p.seasons||[]).includes(prev)&&!p.seasons.includes(V.season)).forEach(p=>{p.seasons=[...p.seasons,V.season];W.player(p)});render(true)},
  pickfiles:()=>document.getElementById('uf')?.click(),
  mview:v=>{V.mv=+v;V.mdel=null;render(true)},
  mvx:(v,el,e)=>{if(e.target===el){V.mv=null;render(true)}},
@@ -625,7 +641,7 @@ const ACT={
  reject:v=>{if(V.rej!==v){V.rej=v;return render(true)}V.rej=null;q(sb.from('profiles').delete().eq('id',v)).then(refresh)},
  delme:async()=>{if(!V.delme){V.delme=1;return render(true)}V.delme=null;if(await q(sb.from('profiles').delete().eq('id',session.user.id)))ACT.logout()},
 };
-const CHG={mdate:(v,el)=>{const m=M(v);if(!m||!el.value)return;m.fecha=el.value;W.match(m);toast('Fecha cambiada: '+fdate(m.fecha))},etype:(v,el)=>{V.et=el.value;render(true)},urole:(v,el)=>{q(sb.from('profiles').update({role:el.value}).eq('id',v)).then(refresh)},ucargo:(v,el)=>{q(sb.from('profiles').update({cargo:el.value||null}).eq('id',v)).then(refresh)},upload:(v,el)=>{const fs=[...el.files];el.value='';if(fs.length)uploadFiles(fs)},gfilter:(v,el)=>{V.gm=el.value?+el.value:'';render(true)},linkp:(v,el)=>{q(sb.from('profiles').update({pid:el.value?+el.value:null}).eq('id',v)).then(refresh)},val:(v,el)=>{const m=M(V.mid),n=el.value?+el.value:null;if(n)m.val[v]=n;else delete m.val[v];W.rating(m.id,+v,n)},rank:(v,el)=>{V.rank=el.value;render()},cmp:(v,el)=>{V.cmp[+v]=+el.value;render()}};
+const CHG={season:(v,el)=>{V.season=el.value;try{localStorage.setItem('sj_season',el.value)}catch(e){}V.gm='';render()},mdate:(v,el)=>{const m=M(v);if(!m||!el.value)return;m.fecha=el.value;W.match(m);toast('Fecha cambiada: '+fdate(m.fecha))},etype:(v,el)=>{V.et=el.value;render(true)},urole:(v,el)=>{q(sb.from('profiles').update({role:el.value}).eq('id',v)).then(refresh)},ucargo:(v,el)=>{q(sb.from('profiles').update({cargo:el.value||null}).eq('id',v)).then(refresh)},upload:(v,el)=>{const fs=[...el.files];el.value='';if(fs.length)uploadFiles(fs)},gfilter:(v,el)=>{V.gm=el.value?+el.value:'';render(true)},linkp:(v,el)=>{q(sb.from('profiles').update({pid:el.value?+el.value:null}).eq('id',v)).then(refresh)},val:(v,el)=>{const m=M(V.mid),n=el.value?+el.value:null;if(n)m.val[v]=n;else delete m.val[v];W.rating(m.id,+v,n)},rank:(v,el)=>{V.rank=el.value;render()},cmp:(v,el)=>{V.cmp[+v]=+el.value;render()}};
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act]');if(!t)return;const f=ACT[t.dataset.act];if(f){if(t.dataset.act!=='shx'&&t.dataset.act!=='noop')e.stopPropagation();f(t.dataset.v,t,e)}});
 document.addEventListener('change',e=>{const t=e.target.closest('[data-chg]');if(t)CHG[t.dataset.chg](t.dataset.v,t)});
 function render(keep){const y=scrollY;app.innerHTML=views[V.view]()+(V.clip?clipSheet():'');if(V.clip)setupClip();if(keep||V.view==='lineup'||V.view==='lista')scrollTo(0,y);else scrollTo(0,0)}

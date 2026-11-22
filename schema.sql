@@ -217,20 +217,28 @@ drop policy if exists "sj media borrar" on storage.objects;
 create policy "sj media borrar" on storage.objects for delete to authenticated
   using (bucket_id = 'media' and (public.is_staff() or owner_id = auth.uid()::text));
 
+-- ---------- Temporadas ----------
+alter table public.matches   add column if not exists season text;
+alter table public.trainings add column if not exists season text;
+alter table public.media     add column if not exists season text;
+alter table public.players   add column if not exists seasons text[] not null default '{}';
+insert into public.settings (key, value) values ('seasons', '["2026/27"]'), ('season', '2026/27')
+on conflict (key) do nothing;
+
 -- ---------- Plantilla inicial · Estrellitas ----------
-insert into public.players (id, n, p, dem, pie, cual) values
-  (1,  'Raúl',           'POR', 'Portero',                                'Diestro', null),
-  (2,  'Gonzalo',        'DEF', 'Lateral izquierdo',                      'Zurdo',   'Rápido y con buena pegada.'),
-  (3,  'Lucas',          'DEF', 'Central',                                'Diestro', 'Muy regular y con buena pegada de balón.'),
-  (4,  'Adri',           'MED', 'Banda derecha',                          'Diestro', 'Rápido y muy escurridizo.'),
-  (5,  'Tadeuz',         'MED', 'Mediocentro',                            'Diestro', 'Muy técnico, buena pegada al balón, goleador y luchador.'),
-  (6,  'Nico',           'DEL', 'Delantero',                              'Diestro', 'Aguanta muy bien el balón, buen pase y buena pegada. Goleador.'),
-  (7,  'Guille',         'DEL', 'Banda y delantero',                      'Diestro', 'Rápido y con buena conducción del balón.'),
-  (8,  'Gonzalo Sancho', 'DEL', 'Delantero',                              'Diestro', 'Rápido y luchador.'),
-  (9,  'Vitorio',        'MED', 'Centro del campo y delantero',           'Diestro', 'Luchador y con buena conducción del balón.'),
-  (10, 'Elías',          'DEL', 'Delantero',                              'Diestro', 'Alto y rápido.'),
-  (11, 'Blake',          'DEF', 'Defensa',                                'Diestro', 'Muy luchador y rápido.'),
-  (12, 'Ale',            'DEF', 'Defensa',                                'Diestro', 'Muy rápido, mete mucho la pierna y va bien al choque.'),
-  (13, 'Christofer',     'MED', 'Interior por banda izquierda o derecha', 'Diestro', 'Muy rápido conduciendo la pelota.'),
-  (14, 'Enrico',         'DEL', 'Delantero',                              'Diestro', 'Muy habilidoso y rápido.')
+insert into public.players (id, n, p, dem, pie, cual, seasons) values
+  (1,  'Raúl',           'POR', 'Portero',                                'Diestro', null, array['2026/27']),
+  (2,  'Gonzalo',        'DEF', 'Lateral izquierdo',                      'Zurdo',   'Rápido y con buena pegada.', array['2026/27']),
+  (3,  'Lucas',          'DEF', 'Central',                                'Diestro', 'Muy regular y con buena pegada de balón.', array['2026/27']),
+  (4,  'Adri',           'MED', 'Banda derecha',                          'Diestro', 'Rápido y muy escurridizo.', array['2026/27']),
+  (5,  'Tadeuz',         'MED', 'Mediocentro',                            'Diestro', 'Muy técnico, buena pegada al balón, goleador y luchador.', array['2026/27']),
+  (6,  'Nico',           'DEL', 'Delantero',                              'Diestro', 'Aguanta muy bien el balón, buen pase y buena pegada. Goleador.', array['2026/27']),
+  (7,  'Guille',         'DEL', 'Banda y delantero',                      'Diestro', 'Rápido y con buena conducción del balón.', array['2026/27']),
+  (8,  'Gonzalo Sancho', 'DEL', 'Delantero',                              'Diestro', 'Rápido y luchador.', array['2026/27']),
+  (9,  'Vitorio',        'MED', 'Centro del campo y delantero',           'Diestro', 'Luchador y con buena conducción del balón.', array['2026/27']),
+  (10, 'Elías',          'DEL', 'Delantero',                              'Diestro', 'Alto y rápido.', array['2026/27']),
+  (11, 'Blake',          'DEF', 'Defensa',                                'Diestro', 'Muy luchador y rápido.', array['2026/27']),
+  (12, 'Ale',            'DEF', 'Defensa',                                'Diestro', 'Muy rápido, mete mucho la pierna y va bien al choque.', array['2026/27']),
+  (13, 'Christofer',     'MED', 'Interior por banda izquierda o derecha', 'Diestro', 'Muy rápido conduciendo la pelota.', array['2026/27']),
+  (14, 'Enrico',         'DEL', 'Delantero',                              'Diestro', 'Muy habilidoso y rápido.', array['2026/27'])
 on conflict (id) do nothing;
