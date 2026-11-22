@@ -223,7 +223,7 @@ insert into public.players (id, n, p, dem, pie, cual) values
   (2,  'Gonzalo',        'DEF', 'Lateral izquierdo',                      'Zurdo',   'Rápido y con buena pegada.'),
   (3,  'Lucas',          'DEF', 'Central',                                'Diestro', 'Muy regular y con buena pegada de balón.'),
   (4,  'Adri',           'MED', 'Banda derecha',                          'Diestro', 'Rápido y muy escurridizo.'),
-  (5,  'Tadeo',          'MED', 'Mediocentro',                            'Diestro', 'Muy técnico, buena pegada al balón, goleador y luchador.'),
+  (5,  'Tadeuz',         'MED', 'Mediocentro',                            'Diestro', 'Muy técnico, buena pegada al balón, goleador y luchador.'),
   (6,  'Nico',           'DEL', 'Delantero',                              'Diestro', 'Aguanta muy bien el balón, buen pase y buena pegada. Goleador.'),
   (7,  'Guille',         'DEL', 'Banda y delantero',                      'Diestro', 'Rápido y con buena conducción del balón.'),
   (8,  'Gonzalo Sancho', 'DEL', 'Delantero',                              'Diestro', 'Rápido y luchador.'),
