@@ -1,6 +1,6 @@
 // Service worker: la app abre rápido y sin cobertura muestra la última versión.
 // Los datos (Supabase) nunca se guardan en caché.
-const CACHE = 'sanjose-v16';
+const CACHE = 'sanjose-v17';
 const SHELL = [
   './', './index.html', './config.js', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './apple-touch-icon.png',
@@ -24,6 +24,11 @@ self.addEventListener('fetch', e => {
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.hostname.endsWith('supabase.co') || url.hostname.endsWith('supabase.in')) return;
+  // Vídeos y audio (Dropbox, etc.): nunca pasar por el service worker.
+  // Safari en iPhone no reproduce vídeos cuyas peticiones con "Range" atraviesan el service worker.
+  if (req.headers.has('range') || req.destination === 'video' || req.destination === 'audio') return;
+  const cdn = ['cdn.jsdelivr.net', 'fonts.googleapis.com', 'fonts.gstatic.com'];
+  if (url.origin !== self.location.origin && !cdn.includes(url.hostname)) return;
 
   if (url.origin === self.location.origin) {
     // Primero la red (para recibir actualizaciones); si no hay, la caché.
