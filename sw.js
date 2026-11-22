@@ -1,6 +1,6 @@
 // Service worker: la app abre rápido y sin cobertura muestra la última versión.
 // Los datos (Supabase) nunca se guardan en caché.
-const CACHE = 'sanjose-v19';
+const CACHE = 'sanjose-v20';
 const SHELL = [
   './', './index.html', './config.js', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './apple-touch-icon.png',
@@ -32,8 +32,9 @@ self.addEventListener('fetch', e => {
 
   if (url.origin === self.location.origin) {
     // Primero la red (para recibir actualizaciones); si no hay, la caché.
+    // "no-cache": pregunta siempre al servidor si hay versión nueva (evita ver la app antigua).
     e.respondWith(
-      fetch(req).then(res => {
+      fetch(req, { cache: 'no-cache' }).then(res => {
         const copy = res.clone();
         caches.open(CACHE).then(c => c.put(req, copy));
         return res;
