@@ -176,7 +176,7 @@ async function boot(){
 function listen(){if(chan)return;chan=sb.channel('club').on('postgres_changes',{event:'*',schema:'public'},()=>{clearTimeout(rtT);rtT=setTimeout(refresh,350)}).subscribe()}
 async function refresh(){if(!session||!S.user)return;if(!S.user.approved)return boot();
  const {data:u}=await sb.from('profiles').select('*').eq('id',session.user.id).maybeSingle();if(!u)return boot();S.user=u;await loadAll();
- if(!['reg','pedit','newm','lineup','lista'].includes(V.view)&&!V.sh&&!V.mv&&!V.uploading&&!document.activeElement?.matches('input,select'))render(true)}
+ if(!['reg','pedit','newm','lineup','lista'].includes(V.view)&&!V.sh&&!V.mv&&!V.clip&&!V.uploading&&!document.activeElement?.matches('input,select'))render(true)}
 const V={view:REMOTE?'loading':S.user?'app':'login',tab:'inicio',reg:{},step:1,rank:'gol',cmp:[1,2]};
 const app=document.getElementById('app');
 const P=id=>S.players.find(p=>p.id==id)||{id,n:'Jugador borrado',p:'MED',d:'–'};
@@ -305,6 +305,7 @@ player:()=>{const p=P(V.pid),s=pstats(p.id),c=coach(),gk=p.p==='POR',mx=Math.max
  <div class="kpis" style="margin-top:16px">${[[s.pj,'Partidos'],[s.tit,'Titular'],[s.min,'Minutos'],...(gk?[[s.par,'Paradas'],[s.enc,'Encajados'],[s.cero,'Porterías a 0']]:[[s.gol,'Goles'],[s.asis,'Asistencias'],[s.pj?Math.round(s.min/s.pj):0,'Min/partido']]),[s.ama,'Amarillas'],[s.roja,'Rojas'],...(c?[[s.val?s.val.toFixed(1):'–','Valoración']]:[[s.ent+'%','Entrenos']])].map(([v,l])=>`<div class="kpi"><div class="num">${v}</div><div>${l}</div></div>`).join('')}</div>
  ${c?`<div class="card"><div style="display:flex;justify-content:space-between"><h3>Asistencia a entrenamientos</h3><b>${s.ent}%</b></div><div class="meter" style="margin-top:8px"><i style="width:${s.ent}%"></i></div></div>`:''}
  <div class="card"><h3>Minutos por partido</h3><p class="sub">Los números naranjas son goles${gk?'':' y asistencias'}.</p><div class="vb">${s.per.length?s.per.map(r=>`<div><span style="height:${Math.max(3,r.min/mx*100)}%">${r.gol||(!gk&&r.asis)?`<em>${r.gol?r.gol+'G':''}${r.asis&&!gk?' '+r.asis+'A':''}</em>`:''}</span><b style="color:var(--ink);font-size:12px">${r.min}'</b>${esc(r.m.rival.split(' ').pop().slice(0,7))}</div>`).join(''):'<p class="sub">Aún no ha jugado.</p>'}</div></div>
+ ${s.gol?`<div class="card"><h3>⚽ Sus goles (${s.gol})</h3>${goalsOf(p.id).map(goalRow).join('')}</div>`:''}
  <div class="card"><h3>Partido a partido</h3><table><tr><th>Rival</th><th>Min</th>${gk?'<th>Par</th><th>Enc</th>':'<th>G</th><th>A</th>'}<th>Tarj.</th>${c?'<th>Nota</th>':''}</tr>
  ${s.per.map(r=>`<tr><td>${fdate(r.m.fecha)} · ${esc(r.m.rival)}</td><td>${r.min}</td>${gk?`<td>${r.par}</td><td>${r.enc}</td>`:`<td>${r.gol}</td><td>${r.asis}</td>`}<td>${'🟨'.repeat(r.ama)}${'🟥'.repeat(r.roja)||(r.ama?'':'–')}</td>${c?`<td>${r.val||'–'}</td>`:''}</tr>`).join('')}</table></div>
  ${c?`<button class="btn ghost" data-act="cmpw" data-v="${p.id}">Comparar con otro jugador</button>`:''}</div>`;},
@@ -316,7 +317,7 @@ match:()=>{const m=M(V.mid),c=coach(),mn=mins(m);
  ${m.estado!=='prox'?vidbox(m):''}
  ${REMOTE?(()=>{const mm=S.media.filter(x=>x.approved&&x.match_id==m.id);return `<div class="card"><h3>📷 Fotos y vídeos (${mm.length})</h3>${mm.length?`<div class="gal">${mm.slice(0,6).map(tile).join('')}</div>`:'<p class="sub">Todavía no hay fotos de este partido.</p>'}<button class="btn ghost sm" data-act="gmatch" data-v="${m.id}">${mm.length>6?'Ver todas o subir más':'Subir fotos o vídeos'}</button></div>`})():''}
  ${m.estado==='live'&&c?`<button class="btn acc" data-act="golive" data-v="${m.id}">Volver al directo</button>`:''}
- ${ev.length?`<div class="card tl"><h3>Lo que pasó</h3>${ev.map(e=>`<div class="row"><b class="num" style="width:34px;font-size:18px">${e.min==null?'·':e.min+"'"}</b><span class="grow">${evtxt(e)}</span></div>`).join('')}</div>`:''}
+ ${ev.length?`<div class="card tl"><h3>Lo que pasó</h3>${ev.map(e=>`<div class="row"><b class="num" style="width:34px;font-size:18px">${e.min==null?'·':e.min+"'"}</b><span class="grow">${evtxt(e)}</span>${e.t==='gol'?clipBtn(m,e,m.ev.indexOf(e)):''}</div>`).join('')}</div>`:''}
  ${V.mv?mviewer():''}${m.estado!=='prox'&&Object.keys(mn).length?`<div class="card"><h3>Minutos jugados${c?' y valoración':''}</h3>${Object.entries(mn).sort((a,b)=>b[1]-a[1]).map(([id,v])=>{const p=P(id);return `<div class="row"><span class="dor">${tag(p)}</span><span class="grow">${esc(p.n)}<div class="sub">${m.tit.includes(+id)?'Titular':'Suplente'}</div></span><b class="r">${v}'</b>${c?`<select data-chg="val" data-v="${id}" style="width:72px;padding:8px" aria-label="Nota de ${esc(p.n)}"><option value="">–</option>${[1,2,3,4,5,6,7,8,9,10].map(n=>`<option ${m.val[id]==n?'selected':''}>${n}</option>`).join('')}</select>`:''}</div>`}).join('')}</div>`:''}
  ${c?`<button class="btn ghost sm" data-act="delm" data-v="${m.id}">${V.delm===m.id?'Pulsa otra vez para borrar el partido':'Borrar partido'}</button>`:''}</div>`;},
 lineup:()=>{const m=M(V.mid),sel=V.sel;
@@ -357,7 +358,7 @@ newm:()=>head('Nuevo partido','app')+`<div class="pad" style="padding-top:0"><h1
  <p class="err" id="err"></p><button class="btn" data-act="mksave">Crear partido</button></div>`,
 };
 const dl=u=>{try{const x=new URL(u);if(/dropbox\.com$/.test(x.hostname)){x.searchParams.set('dl','1');return x.href}const g=u.match(/drive\.google\.com\/file\/d\/([\w-]+)/);if(g)return 'https://drive.google.com/uc?export=download&id='+g[1];if(/1drv\.ms|sharepoint\.com|onedrive/.test(x.hostname))return u;return ''}catch(e){return ''}};
-const raw=u=>{try{const x=new URL(u);if(!/dropbox\.com$/.test(x.hostname)||!/\.(mp4|mov|m4v|webm)$/i.test(x.pathname))return '';x.searchParams.delete('dl');x.searchParams.set('raw','1');return x.href}catch(e){return ''}};
+const raw=u=>{try{const x=new URL(u);if(!/dropbox\.com$/.test(x.hostname)||!/\.(mp4|mov|m4v|webm)$/i.test(x.pathname))return '';x.hostname='dl.dropboxusercontent.com';x.searchParams.delete('dl');x.searchParams.set('raw','1');return x.href}catch(e){return ''}};
 const okUrl=u=>/^https:\/\/\S+\.\S+/.test(u);
 const vids=m=>{const v=m.video||'';if(!v)return [];if(v.trim().startsWith('['))try{return JSON.parse(v).filter(x=>x&&x.u)}catch(e){}return [{t:'Partido completo',u:v}]};
 const vidbox=m=>{const c=coach(),L=vids(m);return `<div class="card"><h3>🎬 Vídeo${L.length>1?'s':''} del partido</h3>${L.map(x=>{const d=dl(x.u),r=raw(x.u);return `<div style="margin-top:12px"><b>${esc(x.t||'Vídeo')}</b>${r?`<video src="${esc(r)}" controls playsinline preload="metadata" style="width:100%;border-radius:12px;background:#000;margin-top:6px"></video>`:''}<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><a class="btn sm" style="display:grid;place-items:center;text-decoration:none" href="${esc(x.u)}" target="_blank" rel="noopener">▶ Ver</a>${d?`<a class="btn ghost sm" style="display:grid;place-items:center;text-decoration:none" href="${esc(d)}" target="_blank" rel="noopener">⬇ Descargar</a>`:'<span class="sub" style="align-self:center">Descarga desde la página</span>'}</div></div>`}).join('')||`<p class="sub">${c?'Aún no hay vídeo. Sube el vídeo a la carpeta de Dropbox «Colegio San José», copia su enlace y pégalo aquí (también vale iCloud, Drive o YouTube).':'El vídeo de este partido todavía no está disponible.'}</p>`}
@@ -398,6 +399,26 @@ function requests(){if(!coach())return '';const pend=S.people.filter(x=>!x.appro
  const who=x=>`${esc(x.nombre)} ${esc(x.apellidos)}${x.admin?' · <b>Admin</b>':''}<div class="sub">${ROLES[x.role]}${x.hijo?' · '+esc(x.rel||'familiar')+' de «'+esc(x.hijo)+'»':''}${x.pid?' · vinculado a '+esc(P(x.pid).n):''}${x.cargo?' · '+esc(x.cargo):''}<br>${esc(x.email||'')} · ${esc(x.tel||'')}</div>`;
  return `<div class="card"><h3>Solicitudes de acceso (${pend.length})</h3>${pend.map(x=>`<div class="row"><span class="grow">${who(x)}</span></div>${psel(x,'pp-'+x.id)}<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn sm" data-act="approve" data-v="${x.id}">Aprobar</button><button class="btn ghost sm" data-act="reject" data-v="${x.id}">${V.rej===x.id?'¿Seguro?':'Rechazar'}</button></div>`).join('')||'<p class="sub">No hay solicitudes pendientes.</p>'}</div>
  <div class="card"><details><summary><b>Miembros del equipo (${ok.length})</b></summary>${ok.map(x=>`<div class="row"><span class="grow">${who(x)}</span></div>${psel(x,'pl-'+x.id,1)}${x.id!==session.user.id?`<div style="display:flex;gap:16px;padding:6px 0 12px"><button class="link" data-act="tadmin" data-v="${x.id}">${x.admin?'Quitar administrador':'Hacer administrador'}</button><button class="link" data-act="reject" data-v="${x.id}">${V.rej===x.id?'¿Seguro? Pulsa otra vez':'Quitar acceso'}</button></div>`:''}`).join('')}</details></div>`}
+const PRE=10,POST=5;
+const fmt=t=>{t=Math.max(0,Math.round(t));return Math.floor(t/60)+':'+String(t%60).padStart(2,'0')};
+const goalsOf=pid=>{const out=[];for(const m of played())m.ev.forEach((e,i)=>{if(e.t==='gol'&&(!pid||e.pl==pid))out.push({m,e,i})});return out.reverse()};
+const clipBtn=(m,e,i,small)=>{const L=vids(m),has=e.ts!=null&&L[e.v||0];if(has)return `<button class="btn sm" style="width:auto;padding:0 12px;margin:0;flex:none" data-act="clip" data-v="${m.id}:${i}">▶ Ver gol</button>`;
+ if(coach()&&L.some(x=>raw(x.u)))return `<button class="btn ghost sm" style="width:auto;padding:0 12px;margin:0;flex:none" data-act="clipmark" data-v="${m.id}:${i}">🎯 Marcar</button>`;return ''};
+const goalRow=({m,e,i})=>{const L=vids(m),has=e.ts!=null&&L[e.v||0];return `<div class="row"><span class="dor">${tag(P(e.pl))}</span><span class="grow"><b>${esc(P(e.pl).n)}</b>${e.asis?` <span class="sub">(asist. ${esc(P(e.asis).n)})</span>`:''}<div class="sub">vs ${esc(m.rival)} · ${fdate(m.fecha)}${has?' · '+esc(L[e.v||0].t)+' '+fmt(e.ts):''}</div></span>${clipBtn(m,e,i)}</div>`};
+function clipSheet(){const C=V.clip,m=M(C.mid);if(!m)return '';const e=m.ev[C.i];if(!e)return '';const L=vids(m),k=C.mode==='mark'?(C.v??e.v??0):(e.v||0),x=L[k],src=x&&raw(x.u);
+ return `<div class="sheet" data-act="clipx"><div data-act="noop"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px"><h2>${C.mode==='mark'?'Marca el gol de ':'Gol de '}${esc(P(e.pl).n)}</h2><button class="link" data-act="clipx">Cerrar</button></div>
+ <p class="sub">vs ${esc(m.rival)} · ${fdate(m.fecha)}${C.mode==='view'&&x?' · '+esc(x.t)+' '+fmt(e.ts):''}</p>
+ ${C.mode==='mark'&&L.length>1?`<div class="chips" style="margin:10px 0">${L.map((y,j)=>`<button class="chip ${j===k?'on':''}" data-act="clipv" data-v="${j}">${esc(y.t)}</button>`).join('')}</div>`:''}
+ ${src?`<video id="clipv" src="${esc(src)}" controls playsinline preload="metadata" style="width:100%;max-height:52vh;border-radius:12px;background:#000;margin-top:8px;display:block"></video>`:'<p class="sub">Para marcar y ver jugadas, el vídeo tiene que ser un enlace de Dropbox a un archivo .mp4 o .mov.</p>'}
+ ${C.mode==='mark'&&src?`<p class="sub">Mueve la barra del vídeo hasta el momento en que entra el balón y pulsa el botón. Se verá desde ${PRE} s antes hasta ${POST} s después.</p>
+ <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">${[-5,-1,1,5].map(d=>`<button class="chip" data-act="seek" data-v="${d}">${d>0?'+':''}${d} s</button>`).join('')}</div>
+ <button class="btn acc" data-act="mark">⚽ El gol es aquí</button>${e.ts!=null?'<button class="btn ghost sm" data-act="unmark">Quitar el momento guardado</button>':''}`:''}
+ ${C.mode==='view'&&src?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px"><button class="btn ghost sm" data-act="replay">↺ Repetir</button><button class="btn ghost sm" data-act="cont">Seguir viendo</button></div>${coach()?'<button class="link" data-act="clipedit">Cambiar el momento</button>':''}`:''}
+ </div></div>`}
+function setupClip(){const v=document.getElementById('clipv');if(!v||!V.clip)return;const C=V.clip,e=M(C.mid).ev[C.i];
+ const start=C.mode==='view'?Math.max(0,e.ts-PRE):(C.t??(C.v==null||C.v===(e.v||0)?e.ts:0)??0);C.stop=C.mode==='view'?e.ts+POST:null;
+ v.addEventListener('loadedmetadata',()=>{try{v.currentTime=start}catch(_){}if(C.mode==='view')v.play().catch(()=>{})},{once:true});
+ v.addEventListener('timeupdate',()=>{if(V.clip===C&&C.stop!=null&&v.currentTime>=C.stop){v.pause();C.stop=null}})}
 const evtxt=e=>{const n=id=>id?esc(P(id).n):'';return {gol:`⚽ <b>Gol de ${n(e.pl)}</b>${e.asis?` <span class="sub">(asist. ${n(e.asis)})</span>`:''}`,enc:`🥅 Gol del rival${e.pl?` <span class="sub">(portero: ${n(e.pl)})</span>`:''}`,parada:`🧤 Parada de ${n(e.pl)}`,cambio:`🔄 Entra ${n(e.entra)}, sale ${n(e.sale)}`,ama:`🟨 Amarilla a ${n(e.pl)}`,roja:`🟥 Roja a ${n(e.pl)}`}[e.t]};
 const clk=m=>{const s=Math.floor(secs(m));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')};
 function sheet(m,on,bench){const sh=V.sh,onl=Object.keys(on).map(Number);
@@ -453,6 +474,7 @@ stats:()=>{const c=coach(),pl=played(),opts=[['gol','Goles'],['asis','Asistencia
  return `<div class="kpis">${[[pl.length,'Jugados'],[pl.reduce((a,m)=>a+gf(m),0),'Goles a favor'],[pl.reduce((a,m)=>a+gc(m),0),'Goles en contra']].map(([v,t])=>`<div class="kpi"><div class="num">${v}</div><div>${t}</div></div>`).join('')}</div>
  <label for="rk">Ranking por</label><select id="rk" data-chg="rank">${opts.map(([v,l])=>`<option value="${v}" ${v===k?'selected':''}>${l}</option>`).join('')}</select>
  <div class="card">${list.map(([p,v],i)=>`<div class="rk ${c?'tap':''}" ${c?`data-act="player" data-v="${p.id}" style="cursor:pointer"`:''}><b class="num" style="font-size:20px;color:var(--mut)">${i+1}</b><span>${esc(p.n)}<div class="bar" style="width:${v/mx*100}%"></div></span><b class="num" style="font-size:22px">${k==='val'?v.toFixed(1):v}</b></div>`).join('')||'<p class="sub">Sin datos todavía.</p>'}</div>
+ ${(()=>{const G=goalsOf();return `<div class="card"><h3>⚽ Goles de la temporada (${G.length})</h3>${G.length?'<p class="sub">Pulsa ▶ para ver la jugada de cada gol.</p>':''}${G.map(goalRow).join('')||'<p class="sub">Aún no hay goles.</p>'}</div>`})()}
  ${c?`<button class="btn ghost" data-act="cmpw" data-v="${S.players[0]?.id}">Comparar dos jugadores</button>`:''}`;},
 perfil:()=>{const u=S.user;return `<div class="card"><h2>${esc(u.nombre)} ${esc(u.apellidos)}</h2><p class="sub">${ROLES[u.role]}${u.cargo?' · '+esc(u.cargo):''}${u.pid?' · '+esc(P(u.pid).n):''}</p>
  <div class="row"><span class="grow">Teléfono</span><b>${esc(u.tel)||'—'}</b></div><div class="row"><span class="grow">Email</span><b style="overflow-wrap:anywhere">${esc(u.email)||'—'}</b></div>${u.admin?'<div class="row"><span class="grow">Permisos</span><b>Administrador</b></div>':''}<div class="row"><span class="grow">Fotos en redes</span><b>${u.img?'Sí':'No'}</b></div></div>
@@ -471,7 +493,7 @@ function docOk(t,v){v=v.toUpperCase().replace(/[\s-]/g,'');const L='TRWAGMYFPDXB
  if(t==='NIE'){const m=v.match(/^([XYZ])(\d{7})([A-Z])$/);return m&&L[('XYZ'.indexOf(m[1])+m[2])%23]===m[3]}
  return /^[A-Z0-9]{6,12}$/.test(v)}
 const ACT={
- go:v=>{if(v==='prev'){V.step--;return render()}if(v==='reg')V.step=1;if(v==='app'||v==='match'&&!V.mid)V.view='app';else if(v==='player'){V.from='app';V.view='player'}else V.view=v;V.delm=V.fin=null;render()},
+ go:v=>{if(v==='prev'){V.step--;return render()}if(v==='reg')V.step=1;if(v==='app'||v==='match'&&!V.mid)V.view='app';else if(v==='player'){V.from='app';V.view='player'}else V.view=v;V.delm=V.fin=V.clip=null;render()},
  login:async()=>{const e=val('em'),p=val('pw');if(!e||!p)return err('Escribe tu email y tu contraseña.');if(REMOTE){const {error}=await sb.auth.signInWithPassword({email:e,password:p});if(error)err(/confirm/i.test(error.message)?'Primero confirma tu email con el enlace que te enviamos.':'Email o contraseña incorrectos. Si es tu primera vez, pulsa Registrarse.');return}if(S.user&&S.user.email===e){V.view='app';return render()}V.email=e;V.view='rol';render()},
  role:v=>{V.reg={role:v,email:V.email||''};V.view='intro';render()},
  dt:v=>{V.reg.dt=v;render()},
@@ -484,7 +506,7 @@ const ACT={
   if(st===5){if(!document.getElementById('c1').checked)return err('Tienes que aceptar la política de privacidad para continuar.');r.img=document.getElementById('c2').checked;r.avisos=document.getElementById('c3').checked;S.user={...r};
    if(REMOTE){const b=document.querySelector('[data-act=next]');b.disabled=true;q(sb.from('profiles').insert({id:session.user.id,...pick(r,UCOLS)})).then(ok=>{b.disabled=false;if(ok)boot()});return}save();V.view='app';V.tab='inicio';return render()}
   V.step++;render()},
- tab:v=>{V.tab=v;V.view='app';V.upmsg=null;V.mv=null;V.reset=null;render()},
+ tab:v=>{V.tab=v;V.view='app';V.upmsg=null;V.mv=null;V.clip=null;V.reset=null;render()},
  player:v=>{V.pid=+v;V.from=V.view==='cmp'?'cmp':'app';V.view='player';render()},
  match:v=>{V.mid=+v;V.view='match';V.sh=null;render()},
  cmpw:v=>{V.cmp=[+v,S.players.find(p=>p.id!=v&&P(v).p===p.p)?.id||S.players.find(p=>p.id!=v).id];V.from=V.view==='player'?'app':'app';V.view='cmp';render()},
@@ -535,6 +557,16 @@ const ACT={
  recheck:()=>boot(),
  approve:v=>{const s=document.getElementById('pp-'+v);q(sb.from('profiles').update({approved:true,pid:s&&s.value?+s.value:null}).eq('id',v)).then(refresh)},
  tadmin:v=>{const x=S.people.find(p=>p.id===v);if(x)q(sb.from('profiles').update({admin:!x.admin}).eq('id',v)).then(refresh)},
+ clip:v=>{const [a,b]=v.split(':');V.clip={mid:+a,i:+b,mode:'view'};render(true)},
+ clipmark:v=>{const [a,b]=v.split(':');V.clip={mid:+a,i:+b,mode:'mark'};render(true)},
+ clipedit:()=>{V.clip={...V.clip,mode:'mark',v:undefined,t:undefined};render(true)},
+ clipx:(v,el,e)=>{if(e.target===el){V.clip=null;render(true)}},
+ clipv:v=>{const cv=document.getElementById('clipv');V.clip.v=+v;V.clip.t=0;render(true)},
+ seek:v=>{const cv=document.getElementById('clipv');if(cv)cv.currentTime=Math.max(0,cv.currentTime+ +v)},
+ mark:()=>{const cv=document.getElementById('clipv'),C=V.clip,m=M(C.mid),e=m.ev[C.i];if(!cv)return;e.v=C.v??e.v??0;e.ts=Math.round(cv.currentTime);W.match(m);toast('Momento guardado: '+fmt(e.ts));V.clip={mid:C.mid,i:C.i,mode:'view'};render(true)},
+ unmark:()=>{const C=V.clip,m=M(C.mid),e=m.ev[C.i];delete e.ts;delete e.v;W.match(m);V.clip=null;render(true)},
+ replay:()=>{const cv=document.getElementById('clipv'),C=V.clip,e=M(C.mid).ev[C.i];if(!cv)return;cv.currentTime=Math.max(0,e.ts-PRE);C.stop=e.ts+POST;cv.play().catch(()=>{})},
+ cont:()=>{const cv=document.getElementById('clipv');V.clip.stop=null;cv&&cv.play().catch(()=>{})},
  pickfiles:()=>document.getElementById('uf')?.click(),
  mview:v=>{V.mv=+v;V.mdel=null;render(true)},
  mvx:(v,el,e)=>{if(e.target===el){V.mv=null;render(true)}},
@@ -549,7 +581,7 @@ const ACT={
 const CHG={upload:(v,el)=>{const fs=[...el.files];el.value='';if(fs.length)uploadFiles(fs)},gfilter:(v,el)=>{V.gm=el.value?+el.value:'';render(true)},linkp:(v,el)=>{q(sb.from('profiles').update({pid:el.value?+el.value:null}).eq('id',v)).then(refresh)},val:(v,el)=>{const m=M(V.mid),n=el.value?+el.value:null;if(n)m.val[v]=n;else delete m.val[v];W.rating(m.id,+v,n)},rank:(v,el)=>{V.rank=el.value;render()},cmp:(v,el)=>{V.cmp[+v]=+el.value;render()}};
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act]');if(!t)return;const f=ACT[t.dataset.act];if(f){if(t.dataset.act!=='shx'&&t.dataset.act!=='noop')e.stopPropagation();f(t.dataset.v,t,e)}});
 document.addEventListener('change',e=>{const t=e.target.closest('[data-chg]');if(t)CHG[t.dataset.chg](t.dataset.v,t)});
-function render(keep){const y=scrollY;app.innerHTML=views[V.view]();if(keep||V.view==='lineup'||V.view==='lista')scrollTo(0,y);else scrollTo(0,0)}
+function render(keep){const y=scrollY;app.innerHTML=views[V.view]()+(V.clip?clipSheet():'');if(V.clip)setupClip();if(keep||V.view==='lineup'||V.view==='lista')scrollTo(0,y);else scrollTo(0,0)}
 setInterval(()=>{for(const c of document.querySelectorAll('[data-clock]')){const m=M(c.dataset.clock);if(m&&m.run)c.textContent=clk(m)}},1000);
 if(REMOTE){sb=window.supabase.createClient(CFG.supabaseUrl,CFG.supabaseKey);sb.auth.onAuthStateChange((ev,s)=>{session=s;if(ev==='PASSWORD_RECOVERY'){V.view='newpw';return render()}if(['INITIAL_SESSION','SIGNED_IN','SIGNED_OUT'].includes(ev))setTimeout(boot,0)})}
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
