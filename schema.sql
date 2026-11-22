@@ -210,6 +210,46 @@ $$;
 revoke execute on function public.member_cards() from public, anon;
 grant execute on function public.member_cards() to authenticated;
 
+-- ---------- Registro de actividad (solo administradores) ----------
+create table if not exists public.audit_log (
+  id bigint generated always as identity primary key, at timestamptz not null default now(),
+  actor uuid, actor_name text, tbl text not null, action text not null, rec text, old jsonb, new jsonb);
+create index if not exists audit_log_at on public.audit_log (at desc);
+alter table public.audit_log enable row level security;
+drop policy if exists "solo administradores leen el registro" on public.audit_log;
+create policy "solo administradores leen el registro" on public.audit_log for select using (public.is_staff());
+revoke all on public.audit_log from anon, authenticated;
+grant select on public.audit_log to authenticated;
+create or replace function public.audit_trg() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare who text; o jsonb; n jsonb; r text;
+begin
+  if tg_op <> 'INSERT' then o := to_jsonb(old); end if;
+  if tg_op <> 'DELETE' then n := to_jsonb(new); end if;
+  if tg_op = 'UPDATE' and o = n then return new; end if;
+  if tg_table_name = 'matches' and tg_op = 'UPDATE' and (o - 'acc' - 'run') = (n - 'acc' - 'run') then return new; end if;
+  select nombre || ' ' || coalesce(apellidos,'') into who from profiles where id = auth.uid();
+  r := coalesce(n->>'id', o->>'id', n->>'key', o->>'key', (n->>'match_id') || ':' || (n->>'player_id'), (o->>'match_id') || ':' || (o->>'player_id'));
+  insert into audit_log (actor, actor_name, tbl, action, rec, old, new)
+  values (auth.uid(), coalesce(who, case when auth.uid() is null then 'Panel de Supabase' else 'Usuario' end), tg_table_name, tg_op, r, o, n);
+  return coalesce(new, old);
+end $$;
+revoke execute on function public.audit_trg() from public, anon, authenticated;
+do $$ declare t text; begin
+  foreach t in array array['players','matches','trainings','settings','media','profiles','ratings'] loop
+    execute format('drop trigger if exists audit on public.%I', t);
+    execute format('create trigger audit after insert or update or delete on public.%I for each row execute function public.audit_trg()', t);
+  end loop; end $$;
+drop trigger if exists audit on public.messages;
+create trigger audit after delete on public.messages for each row execute function public.audit_trg();
+create or replace function public.last_access()
+returns table (id uuid, last_sign_in_at timestamptz, created_at timestamptz)
+language sql stable security definer set search_path = public, auth as $$
+  select u.id, u.last_sign_in_at, u.created_at from auth.users u where public.is_staff();
+$$;
+revoke execute on function public.last_access() from public, anon;
+grant execute on function public.last_access() to authenticated;
+
 -- ---------- Tiempo real (marcador en directo) ----------
 do $$
 declare t text;
