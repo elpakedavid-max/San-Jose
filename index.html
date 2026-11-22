@@ -103,6 +103,7 @@ table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:8px 4px;b
 .msgs{display:flex;flex-direction:column;gap:8px;padding-bottom:84px}.msg{align-self:flex-start;max-width:85%;background:var(--card);border:1px solid var(--line);border-radius:16px 16px 16px 4px;padding:8px 12px;font-size:15px;overflow-wrap:anywhere}.msg.me{align-self:flex-end;background:var(--pri);color:#fff;border-color:var(--pri);border-radius:16px 16px 4px 16px}.msg.me .sub,.msg.me .mt,.msg.me .link{color:rgba(255,255,255,.8)}.mt{font-size:11px;color:var(--mut);text-align:right;margin-top:2px}.mt .link{font-size:11px}.mday{align-self:center;font-size:12px;color:var(--mut);background:var(--soft);border-radius:99px;padding:3px 10px;margin:6px 0}
 .sendbar{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(58px + env(safe-area-inset-bottom));width:100%;max-width:480px;display:flex;gap:8px;padding:8px 12px;background:var(--bg);border-top:1px solid var(--line);z-index:5}.sendbar textarea{flex:1;font:16px Inter,sans-serif;padding:11px 12px;border-radius:12px;border:1px solid var(--line);background:var(--card);color:var(--ink);resize:none;max-height:120px}
 .cbadge{position:absolute;top:4px;left:calc(50% + 6px);min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--acc);color:#fff;font-size:10px;place-items:center}.cb2{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--acc);color:#fff;font-size:11px}
+.dor img{width:100%;height:100%;object-fit:cover;border-radius:inherit;display:block}.dor{overflow:hidden}
 .avi{display:inline-grid;place-items:center;flex:none;border-radius:50%;object-fit:cover;background:var(--soft);color:var(--pri);font-weight:700;vertical-align:middle}.mrow{display:flex;gap:8px;align-items:flex-end;max-width:92%}.mrow .msg{max-width:none}
 .mic{flex:none;width:46px;height:46px;border-radius:50%;border:1px solid var(--line);background:var(--card);font-size:20px;cursor:pointer}.recst{flex:1;display:flex;align-items:center;gap:8px;font-weight:600}.recst .dot{width:10px;height:10px;border-radius:50%;background:var(--bad);animation:blink 1s infinite}@keyframes blink{50%{opacity:.2}}
 .aud{display:flex;align-items:center;gap:6px}.aud audio{height:36px;max-width:220px}
@@ -139,7 +140,7 @@ if(REMOTE){S={allP:[],allM:[],allT:[],folder:'',people:[],media:[],msgs:[],seaso
  const sz=x=>(x.season||S.season)===V.season;
  Object.defineProperties(S,{players:{get(){return this.allP.filter(p=>(p.seasons||[]).includes(V.season))},set(v){this.allP=v}},matches:{get(){return this.allM.filter(sz)},set(v){this.allM=v}},trainings:{get(){return this.allT.filter(sz)},set(v){this.allT=v}}});}
 const nid=()=>Date.now()*100+Math.floor(Math.random()*100);
-const MCOLS=['id','rival','fecha','local','dur','estado','tit','ev','acc','run','video','season'],PCOLS=['id','n','p','d','dem','pie','cual','seasons'],UCOLS=['nombre','apellidos','nac','tel','email','role','cargo','cat','pid','rel','hijo','img','avisos'];
+const MCOLS=['id','rival','fecha','local','dur','estado','tit','ev','acc','run','video','season'],PCOLS=['id','n','p','d','dem','pie','cual','seasons','photo'],UCOLS=['nombre','apellidos','nac','tel','email','role','cargo','cat','pid','rel','hijo','img','avisos'];
 const pick=(o,ks)=>Object.fromEntries(ks.map(k=>[k,o[k]===undefined||o[k]===''?null:o[k]]));
 const authErr=m=>{m=String(m||'');if(/rate limit/i.test(m))return 'Ahora mismo hay muchos registros a la vez. Espera unos minutos y vuelve a intentarlo.';if(/already registered|already exists/i.test(m))return 'Ese email ya tiene cuenta. Pulsa «Ya tengo cuenta» para entrar.';if(/password/i.test(m)&&/(short|weak|least)/i.test(m))return 'La contraseña es demasiado corta o sencilla.';if(/invalid.*email|email.*invalid/i.test(m))return 'Revisa el email.';return m};
 function toast(t){let e=document.getElementById('toast');if(!e){e=document.createElement('div');e.id='toast';document.body.appendChild(e)}e.textContent=t;e.className='on';clearTimeout(e._t);e._t=setTimeout(()=>e.className='',4500)}
@@ -179,11 +180,14 @@ const chKey=ch=>'sj_seen_'+(session?.user.id||'')+'_'+ch;
 const unread=ch=>{const t=lsGet(chKey(ch))||'';return S.msgs.filter(m=>m.channel===ch&&m.author!==session?.user.id&&m.created_at>t).length};
 const myDM=()=>'dm:'+(session?.user.id||'');
 const unreadAll=()=>{if(!REMOTE||!S.msgs)return 0;const chs=coach()?[...new Set(S.msgs.map(m=>m.channel))]:['grupo',myDM()];return chs.reduce((a,c)=>a+unread(c),0)};
-async function loadCards(){const r=await sb.rpc('member_cards');S.cards=r.error?[]:r.data;const need=[...S.cards.map(x=>x.avatar),S.user?.avatar].filter(k=>k&&!URLC[k]);
+async function loadCards(){const r=await sb.rpc('member_cards');S.cards=r.error?[]:r.data;const need=[...S.cards.map(x=>x.avatar),S.user?.avatar,...S.allP.map(x=>x.photo),...(S.staff||[]).map(x=>x.f)].filter(k=>k&&!URLC[k]);
  if(need.length){const u=await sb.storage.from('media').createSignedUrls([...new Set(need)],6*3600);(u.data||[]).forEach(o=>{if(o.signedUrl)URLC[o.path]={u:o.signedUrl,t:Date.now()}})}}
 const avUrl=path=>path&&URLC[path]?.u;
 const avatar=(id,label,size=36)=>{const c=(S.cards||[]).find(x=>x.id===id),pth=id===session?.user.id?S.user?.avatar:c?.avatar,u=avUrl(pth),t=(label||c?.name||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase();
  return u?`<img class="avi" src="${esc(u)}" alt="" style="width:${size}px;height:${size}px">`:`<span class="avi" style="width:${size}px;height:${size}px;font-size:${Math.round(size*.38)}px">${esc(t)}</span>`};
+async function upSquare(file,name,size=600){const bmp=await createImageBitmap(file),side=Math.min(bmp.width,bmp.height),cv=document.createElement('canvas');cv.width=cv.height=size;cv.getContext('2d').drawImage(bmp,(bmp.width-side)/2,(bmp.height-side)/2,side,side,0,0,size,size);
+ const blob=await new Promise(r=>cv.toBlob(r,'image/jpeg',.85)),path=`${session.user.id}/${name}_${Date.now()}.jpg`;const r=await sb.storage.from('media').upload(path,blob,{contentType:'image/jpeg'});if(r.error)throw r.error;
+ const u=await sb.storage.from('media').createSignedUrl(path,6*3600);if(u.data)URLC[path]={u:u.data.signedUrl,t:Date.now()};return path}
 async function loadMedia(){
  const md=await sb.from('media').select('*').order('created_at',{ascending:false});if(md.error){S.media=[];return}
  const now=Date.now(),need=[];for(const x of md.data)for(const k of [x.path,x.thumb])if(k&&(!URLC[k]||now-URLC[k].t>5*3600e3))need.push(k);
@@ -215,7 +219,7 @@ const P=id=>(S.allP||S.players).find(p=>p.id==id)||{id,n:'Jugador borrado',p:'ME
 const M=id=>(S.allM||S.matches).find(m=>m.id==id);
 const coach=()=>!!S.user&&(S.user.role==='entrenador'||!!S.user.admin);
 const fdate=d=>new Date(d+'T12:00').toLocaleDateString('es-ES',{day:'numeric',month:'short'});
-const tag=p=>p.d?p.d:esc((p.n||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase());
+const tag=p=>p.photo&&typeof URLC!=='undefined'&&URLC[p.photo]?`<img src="${esc(URLC[p.photo].u)}" alt="">`:p.d?p.d:esc((p.n||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase());
 const lab=p=>(p.d?p.d+' · ':'')+esc(p.n);
 const STEPS=[1,2,4,5];
 const ini=u=>(u.nombre[0]+(u.apellidos[0]||'')).toUpperCase();
@@ -270,7 +274,7 @@ admin:()=>{if(!coach())return head('Administración','app')+'<div class="pad"><p
  ${REMOTE?requests():''}
  <div class="card"><h3>🧑‍🏫 Cuerpo técnico</h3><p class="sub">Lo ven todas las familias en Plantilla. No necesitan tener cuenta en la app.</p>
  ${L.map((x,k)=>`<div class="row"><span class="grow"><b>${esc(x.n)}</b><div class="sub">${esc(x.c||'')}${x.t?' · '+esc(x.t):''}</div></span><button class="link" data-act="stedit" data-v="${k}">Editar</button></div>`).join('')||'<p class="sub">Aún no hay nadie.</p>'}
- ${V.ste!=null?`<label for="sn">Nombre</label><input id="sn" value="${esc(e.n)}"><label for="sc">Cargo</label><input id="sc" list="stc" value="${esc(e.c)}"><datalist id="stc">${STAFFC.map(c=>`<option value="${c}">`).join('')}</datalist>
+ ${V.ste!=null?`${V.ste>=0?`<div style="display:flex;align-items:center;gap:14px;margin-top:10px"><span class="dor" style="width:72px;height:72px;font-size:26px;border-radius:18px">${e.f&&URLC[e.f]?`<img src="${esc(URLC[e.f].u)}" alt="">`:esc((e.n||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase())}</span><div><input type="file" id="sphf" accept="image/*" hidden data-chg="sphoto"><button class="btn sm" style="width:auto;padding:0 14px" data-act="sphpick" ${V.phbusy?'disabled':''}>${V.phbusy?'Subiendo…':e.f?'📷 Cambiar foto':'📷 Poner foto'}</button>${e.f?'<br><button class="link" data-act="sphdel">Quitar foto</button>':''}</div></div>`:'<p class="sub">Guárdalo y después podrás ponerle foto.</p>'}<label for="sn">Nombre</label><input id="sn" value="${esc(e.n)}"><label for="sc">Cargo</label><input id="sc" list="stc" value="${esc(e.c)}"><datalist id="stc">${STAFFC.map(c=>`<option value="${c}">`).join('')}</datalist>
  <label for="st">Teléfono (opcional, lo verán las familias)</label><input id="st" type="tel" value="${esc(e.t||'')}"><p class="err" id="err"></p>
  <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button class="btn sm" data-act="stsave">Guardar</button><button class="btn ghost sm" data-act="stedit" data-v="">Cancelar</button></div>${V.ste>=0?`<button class="link" data-act="stdel">${V.stdel?'¿Seguro? Pulsa otra vez':'Quitar del cuerpo técnico'}</button>`:''}`
  :'<button class="btn sm" data-act="stedit" data-v="-1">+ Añadir miembro</button>'}</div>
@@ -366,7 +370,7 @@ app:()=>{const t=V.tab,c=coach();
  return `<div class="appbar"><span class="lg"><img src="${LOGO}" alt=""></span><b>${{inicio:'San José',partidos:'Partidos',chat:'Chat del equipo',galeria:'Fotos y vídeos',plantilla:!c&&S.user.pid?'Mi ficha':'Plantilla',stats:'Estadísticas',perfil:'Mi perfil'}[t]}</b>${REMOTE&&S.seasons.length?`<select class="season" data-chg="season" aria-label="Temporada">${S.seasons.map(x=>`<option ${x===V.season?'selected':''}>${esc(x)}</option>`).join('')}</select>`:''}<button class="av" data-act="tab" data-v="perfil" aria-label="Mi perfil" style="border:0;cursor:pointer;padding:0;overflow:hidden">${REMOTE&&avUrl(S.user.avatar)?`<img src="${esc(avUrl(S.user.avatar))}" alt="" style="width:100%;height:100%;object-fit:cover">`:ini(S.user)}</button></div>
  <div class="pad">${tabv[t]()}</div><nav class="tabs">${tabs.map(([k,l,i])=>`<button class="${k===t?'on':''}" data-act="tab" data-v="${k}" style="position:relative">${ico(i)}${l}${k==='chat'?`<b id="chatbadge" class="cbadge" style="display:${unreadAll()?'grid':'none'}">${unreadAll()}</b>`:''}</button>`).join('')}</nav>${V.mv?mviewer():''}`;},
 player:()=>{const p=P(V.pid),s=pstats(p.id),c=coach(),gk=p.p==='POR',mx=Math.max(90,...s.per.map(r=>r.min));
- return head('',V.from||'app')+`<div class="pad" style="padding-top:0"><div style="display:flex;gap:14px;align-items:center">${p.d?`<div class="num" style="font-size:72px;line-height:.9;color:var(--pri)">${p.d}</div>`:''}<div><h1>${esc(p.n)}</h1><div class="sub">${esc(p.dem||POS[p.p])}${p.pie?' · '+esc(p.pie):''}</div></div></div>
+ return head('',V.from||'app')+`<div class="pad" style="padding-top:0"><div style="display:flex;gap:14px;align-items:center">${p.photo&&URLC[p.photo]?`<img src="${esc(URLC[p.photo].u)}" alt="" style="width:92px;height:92px;border-radius:22px;object-fit:cover;flex:none">`:''}${p.d?`<div class="num" style="font-size:72px;line-height:.9;color:var(--pri)">${p.d}</div>`:''}<div><h1>${esc(p.n)}</h1><div class="sub">${esc(p.dem||POS[p.p])}${p.pie?' · '+esc(p.pie):''}</div></div></div>
  ${p.cual?`<div class="info" style="margin-top:12px">⭐ ${esc(p.cual)}</div>`:''}
  ${c?`<button class="btn ghost sm" data-act="pedit" data-v="${p.id}">Editar datos del jugador</button>`:''}
  <div class="kpis" style="margin-top:16px">${[[s.pj,'Partidos'],[s.tit,'Titular'],[s.min,'Minutos'],...(gk?[[s.par,'Paradas'],[s.enc,'Encajados'],[s.cero,'Porterías a 0']]:[[s.gol,'Goles'],[s.asis,'Asistencias'],[s.pj?Math.round(s.min/s.pj):0,'Min/partido']]),[s.ama,'Amarillas'],[s.roja,'Rojas'],...(c?[[s.val?s.val.toFixed(1):'–','Valoración']]:[[s.ent+'%','Entrenos']])].map(([v,l])=>`<div class="kpi"><div class="num">${v}</div><div>${l}</div></div>`).join('')}</div>
@@ -413,6 +417,7 @@ lista:()=>{const sel=V.sel;return head('Entrenamiento','app')+`<div class="pad" 
  <div class="pgrid">${S.players.map(p=>`<button class="pbtn" data-act="lsel" data-v="${p.id}" style="${sel.includes(p.id)?'border:2px solid var(--ok)':'opacity:.55'}"><span class="dor">${tag(p)}</span><span>${esc(p.n)}</span></button>`).join('')}</div>
  <button class="btn" data-act="lsave">Guardar asistencia</button></div>`;},
 pedit:()=>{const p=V.pid?P(V.pid):{n:'',p:'MED',d:'',dem:'',pie:'',cual:''};return head(V.pid?'Editar jugador':'Nuevo jugador',V.pid?'player':'app')+`<div class="pad" style="padding-top:0"><h1>${V.pid?esc(p.n):'Nuevo jugador'}</h1>
+ ${REMOTE&&V.pid?`<div style="display:flex;align-items:center;gap:14px;margin-top:10px"><span class="dor" style="width:80px;height:80px;font-size:30px;border-radius:20px">${tag(p)}</span><div><input type="file" id="pphf" accept="image/*" hidden data-chg="pphoto"><button class="btn sm" style="width:auto;padding:0 14px" data-act="pphpick" ${V.phbusy?'disabled':''}>${V.phbusy?'Subiendo…':p.photo?'📷 Cambiar foto':'📷 Poner foto'}</button>${p.photo?'<br><button class="link" data-act="pphdel">Quitar foto</button>':''}</div></div>`:REMOTE?'<p class="sub">Guarda el jugador y después podrás ponerle foto.</p>':''}
  <label for="pn">Nombre</label><input id="pn" value="${esc(p.n)}">
  <label for="pd">Dorsal (opcional)</label><input id="pd" type="number" inputmode="numeric" min="1" max="99" value="${esc(p.d)}">
  <label for="pp">Línea</label><select id="pp">${Object.entries(POS).map(([k,v])=>`<option value="${k}" ${p.p===k?'selected':''}>${v}</option>`).join('')}</select>
@@ -474,7 +479,7 @@ async function uploadFiles(files){
  await loadMedia();render(true);
 }
 const STAFFC=['Entrenador','Segundo entrenador','Entrenador de porteros','Preparador físico','Delegado','Coordinador'];
-const staffCard=()=>{const L=S.staff||[];if(!L.length&&!coach())return '';return `<div class="card"><h3>🧑‍🏫 Cuerpo técnico</h3>${L.map(x=>`<div class="row"><span class="dor">${esc((x.n||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase())}</span><span class="grow"><b>${esc(x.n)}</b><div class="sub">${esc(x.c||'')}</div></span>${x.t?`<span class="sub">${esc(x.t)}</span>`:''}</div>`).join('')||'<p class="sub">Añádelo desde Perfil → Administración.</p>'}</div>`};
+const staffCard=()=>{const L=S.staff||[];if(!L.length&&!coach())return '';return `<div class="card"><h3>🧑‍🏫 Cuerpo técnico</h3>${L.map(x=>`<div class="row"><span class="dor">${x.f&&URLC[x.f]?`<img src="${esc(URLC[x.f].u)}" alt="">`:esc((x.n||'?').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase())}</span><span class="grow"><b>${esc(x.n)}</b><div class="sub">${esc(x.c||'')}</div></span>${x.t?`<span class="sub">${esc(x.t)}</span>`:''}</div>`).join('')||'<p class="sub">Añádelo desde Perfil → Administración.</p>'}</div>`};
 function requests(){if(!coach())return '';const pend=S.people.filter(x=>!x.approved),ok=S.people.filter(x=>x.approved);
  const norm=t=>String(t||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
  const guess=x=>x.pid||(x.hijo?[...S.players].sort((a,b)=>b.n.length-a.n.length).find(p=>norm(x.hijo).includes(norm(p.n))):null)?.id||'';
@@ -718,7 +723,7 @@ const ACT={
  replay:()=>{const cv=document.getElementById('clipv'),C=V.clip,e=M(C.mid).ev[C.i];if(!cv)return;cv.currentTime=Math.max(0,e.ts-PRE);C.stop=e.ts+POST;cv.play().catch(()=>{})},
  cont:()=>{const cv=document.getElementById('clipv');V.clip.stop=null;cv&&cv.play().catch(()=>{})},
  stedit:v=>{V.ste=v===''?null:+v;V.stdel=null;render(true)},
- stsave:()=>{const n=val('sn'),c=val('sc'),t=val('st');if(!n)return err('Escribe el nombre.');const L=[...(S.staff||[])],x={n,c,t};if(V.ste>=0)L[V.ste]=x;else L.push(x);S.staff=L;V.ste=null;W.setting('staff',JSON.stringify(L));render(true)},
+ stsave:()=>{const n=val('sn'),c=val('sc'),t=val('st');if(!n)return err('Escribe el nombre.');const L=[...(S.staff||[])],x={n,c,t,...(V.ste>=0&&L[V.ste]?.f?{f:L[V.ste].f}:{})};if(V.ste>=0)L[V.ste]=x;else L.push(x);S.staff=L;V.ste=null;W.setting('staff',JSON.stringify(L));render(true)},
  stdel:()=>{if(!V.stdel){V.stdel=1;return render(true)}const L=[...(S.staff||[])];L.splice(V.ste,1);S.staff=L;V.ste=null;V.stdel=null;W.setting('staff',JSON.stringify(L));render(true)},
  medit:v=>{V.mid=+v;V.et='gol';V.evdel=null;V.view='medit';render()},
  eloc:v=>{const m=M(V.mid);m.rival=val('er')||m.rival;m.fecha=val('ef')||m.fecha;m.local=v==='1';W.match(m);render(true)},
@@ -754,6 +759,10 @@ const ACT={
  reccancel:()=>{recStop(false);toast('Audio descartado')},
  avpick:()=>document.getElementById('avf')?.click(),
  avdel:async()=>{const old=S.user.avatar;if(await q(sb.from('profiles').update({avatar:null}).eq('id',session.user.id))){S.user.avatar=null;sb.storage.from('media').remove([old]);toast('Foto quitada');render(true)}},
+ pphpick:()=>document.getElementById('pphf')?.click(),
+ sphpick:()=>document.getElementById('sphf')?.click(),
+ pphdel:()=>{const p=P(V.pid),old=p.photo;p.photo=null;W.player(p);if(old)sb.storage.from('media').remove([old]);render(true)},
+ sphdel:()=>{const L=[...(S.staff||[])],old=L[V.ste]?.f;if(!L[V.ste])return;delete L[V.ste].f;S.staff=L;W.setting('staff',JSON.stringify(L));if(old)sb.storage.from('media').remove([old]);render(true)},
  pickfiles:()=>document.getElementById('uf')?.click(),
  mview:v=>{V.mv=+v;V.mdel=null;render(true)},
  mvx:(v,el,e)=>{if(e.target===el){V.mv=null;render(true)}},
@@ -765,7 +774,8 @@ const ACT={
  reject:v=>{if(V.rej!==v){V.rej=v;return render(true)}V.rej=null;q(sb.from('profiles').delete().eq('id',v)).then(refresh)},
  delme:async()=>{if(!V.delme){V.delme=1;return render(true)}V.delme=null;if(await q(sb.from('profiles').delete().eq('id',session.user.id)))ACT.logout()},
 };
-const CHG={avatar:async(v,el)=>{const f=el.files[0];el.value='';if(!f)return;V.avbusy=1;render(true);
+const CHG={pphoto:async(v,el)=>{const f=el.files[0];el.value='';if(!f)return;const p=P(V.pid);V.phbusy=1;render(true);try{const old=p.photo;p.photo=await upSquare(f,'player_'+p.id);await W.player(p);if(old)sb.storage.from('media').remove([old]);toast('Foto de '+p.n+' guardada')}catch(e){toast('No se ha podido subir: '+(e.message||e))}V.phbusy=0;render(true)},
+ sphoto:async(v,el)=>{const f=el.files[0];el.value='';if(!f)return;const L=[...(S.staff||[])],x=L[V.ste];if(!x)return;V.phbusy=1;render(true);try{const old=x.f;x.f=await upSquare(f,'staff');S.staff=L;await W.setting('staff',JSON.stringify(L));if(old)sb.storage.from('media').remove([old]);toast('Foto guardada')}catch(e){toast('No se ha podido subir: '+(e.message||e))}V.phbusy=0;render(true)},avatar:async(v,el)=>{const f=el.files[0];el.value='';if(!f)return;V.avbusy=1;render(true);
   try{const bmp=await createImageBitmap(f),side=Math.min(bmp.width,bmp.height),cv=document.createElement('canvas');cv.width=cv.height=400;cv.getContext('2d').drawImage(bmp,(bmp.width-side)/2,(bmp.height-side)/2,side,side,0,0,400,400);
    const blob=await new Promise(r=>cv.toBlob(r,'image/jpeg',.85)),path=`${session.user.id}/avatar_${Date.now()}.jpg`,old=S.user.avatar;
    let r=await sb.storage.from('media').upload(path,blob,{contentType:'image/jpeg'});if(r.error)throw r.error;

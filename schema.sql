@@ -193,6 +193,7 @@ grant select, insert, delete on public.messages to authenticated;
 revoke all on public.messages from anon;
 
 -- ---------- Fotos de perfil ----------
+alter table public.players add column if not exists photo text;
 alter table public.profiles add column if not exists avatar text;
 create or replace function public.member_cards()
 returns table (id uuid, name text, info text, avatar text)
