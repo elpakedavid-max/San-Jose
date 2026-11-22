@@ -473,7 +473,9 @@ function clipSheet(){const C=V.clip,m=M(C.mid);if(!m)return '';const e=m.ev[C.i]
  ${src?'<button class="btn ghost sm" data-act="clipprev">▶ Probar la jugada</button>':''}
  <p class="err" id="clerr"></p><button class="btn acc" data-act="mark">✔ Guardar momento del gol</button>
  <p class="sub">Se verá desde ${PRE} s antes hasta ${POST} s después.</p>${e.ts!=null?'<button class="btn ghost sm" data-act="unmark">Quitar el momento guardado</button>':''}`
- :`${src?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px"><button class="btn ghost sm" data-act="replay">↺ Repetir</button><button class="btn ghost sm" data-act="cont">Seguir viendo</button></div>`:''}${x?`<a class="btn ghost sm" style="display:grid;place-items:center;text-decoration:none" href="${esc(x.u)}" target="_blank" rel="noopener">Abrir el vídeo en Dropbox (gol en el ${fmt(e.ts)})</a>`:''}${coach()?'<button class="link" data-act="clipedit">Cambiar el momento</button>':''}`}
+ :`${src?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:6px"><button class="btn ghost sm" data-act="replay">↺ Repetir</button><button class="btn ghost sm" data-act="cont">Seguir viendo</button></div>
+ ${V.dlr&&V.dlr.key===C.mid+':'+C.i&&V.dlr.file?`<button class="btn acc" data-act="clipsave">💾 Guardar el vídeo del gol</button><p class="sub" style="text-align:center">${esc(V.dlr.file.name)} · ${(V.dlr.file.size/1048576).toFixed(1)} MB</p>`
+ :`<button class="btn" data-act="clipdl" ${V.dlr&&V.dlr.busy?'disabled':''}>⬇ Descargar el gol</button>`}<p id="dlst" class="sub" style="text-align:center">${V.dlr&&V.dlr.busy&&V.dlr.key===C.mid+':'+C.i?'Preparando el clip…':''}</p>`:''}${x?`<a class="btn ghost sm" style="display:grid;place-items:center;text-decoration:none" href="${esc(x.u)}" target="_blank" rel="noopener">Abrir el vídeo en Dropbox (gol en el ${fmt(e.ts)})</a>`:''}${coach()?'<button class="link" data-act="clipedit">Cambiar el momento</button>':''}`}
  </div></div>`}
 function setupClip(){const v=document.getElementById('clipv');if(!v||!V.clip)return;const C=V.clip,e=M(C.mid).ev[C.i],st=document.getElementById('clipst');
  const start=C.mode==='view'?Math.max(0,e.ts-PRE):(C.t??(C.v==null||C.v===(e.v||0)?e.ts:null)??0);C.stop=C.mode==='view'?e.ts+POST:null;
@@ -483,6 +485,24 @@ function setupClip(){const v=document.getElementById('clipv');if(!v||!V.clip)ret
  v.addEventListener('seeked',show);
  v.addEventListener('error',()=>{if(st)st.innerHTML='<b style="color:var(--bad)">No se ha podido cargar el vídeo en este móvil.</b>'+(C.mode==='mark'?' Escribe el minuto y segundo a mano (míralo en Dropbox).':' Ábrelo en Dropbox con el botón de abajo.')});
  try{v.load()}catch(_){}}
+async function recordClip(v,ac,a,b,m,e,key){
+ const st=t=>{const x=document.getElementById('dlst');if(x)x.textContent=t};
+ if(Math.abs(v.currentTime-a)>1){v.currentTime=a;await new Promise(r=>{v.addEventListener('seeked',r,{once:true});setTimeout(r,8000)})}
+ const vw=v.videoWidth||1280,vh=v.videoHeight||720,Wd=Math.min(1280,vw),Hd=Math.round(Wd*vh/vw/2)*2;
+ const cv=document.createElement('canvas');cv.width=Wd;cv.height=Hd;const g=cv.getContext('2d');const stream=cv.captureStream(30);
+ if(ac){try{const sn=ac.createMediaElementSource(v),dst=ac.createMediaStreamDestination();sn.connect(dst);dst.stream.getAudioTracks().forEach(t=>stream.addTrack(t))}catch(_){v.muted=true}}else v.muted=true;
+ const type=['video/mp4;codecs=avc1,mp4a.40.2','video/mp4','video/webm;codecs=vp9,opus','video/webm'].find(t=>MediaRecorder.isTypeSupported(t))||'';
+ const rec=new MediaRecorder(stream,type?{mimeType:type,videoBitsPerSecond:5e6}:undefined),chunks=[];rec.ondataavailable=ev=>{if(ev.data&&ev.data.size)chunks.push(ev.data)};
+ let raf;const draw=()=>{try{g.drawImage(v,0,0,Wd,Hd)}catch(_){}st(`Preparando el clip… ${Math.max(0,Math.min(b-a,Math.round(v.currentTime-a)))} de ${Math.round(b-a)} s`);raf=requestAnimationFrame(draw)};
+ draw();rec.start(500);
+ await new Promise(r=>{const chk=()=>{if(v.currentTime>=b||v.ended||v.error)r();else setTimeout(chk,100)};chk()});
+ const done=new Promise(r=>rec.onstop=r);rec.stop();v.pause();cancelAnimationFrame(raf);await done;
+ const blob=new Blob(chunks,{type:(rec.mimeType||type||'video/webm').split(';')[0]}),ext=/mp4/.test(blob.type)?'mp4':'webm';
+ const name=`Gol ${P(e.pl).n} vs ${m.rival} ${m.fecha}.${ext}`.replace(/[\\/:*?"<>|]/g,'-');
+ v.remove();try{ac&&ac.close()}catch(_){}
+ if(!blob.size)throw new Error('vacío');
+ V.dlr={key,file:new File([blob],name,{type:blob.type})};
+}
 const evtxt=e=>{const n=id=>id?esc(P(id).n):'';return {gol:`⚽ <b>Gol de ${n(e.pl)}</b>${e.asis?` <span class="sub">(asist. ${n(e.asis)})</span>`:''}`,enc:`🥅 Gol del rival${e.pl?` <span class="sub">(portero: ${n(e.pl)})</span>`:''}`,parada:`🧤 Parada de ${n(e.pl)}`,cambio:`🔄 Entra ${n(e.entra)}, sale ${n(e.sale)}`,ama:`🟨 Amarilla a ${n(e.pl)}`,roja:`🟥 Roja a ${n(e.pl)}`}[e.t]};
 const clk=m=>{const s=Math.floor(secs(m));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')};
 function sheet(m,on,bench){const sh=V.sh,onl=Object.keys(on).map(Number);
@@ -631,6 +651,17 @@ const ACT={
  seek:v=>{const cv=document.getElementById('clipv');if(cv)cv.currentTime=Math.max(0,cv.currentTime+ +v)},
  mark:()=>{const C=V.clip,m=M(C.mid),e=m.ev[C.i],mm=+val('cmm')||0,ss=+val('css')||0,err=t=>{const x=document.getElementById('clerr');if(x)x.textContent=t};if(ss>59)return err('Los segundos van de 0 a 59.');const t=mm*60+ss,cv=document.getElementById('clipv');
   if(cv&&cv.duration&&t>cv.duration)return err('Ese momento es más largo que el vídeo ('+fmt(cv.duration)+').');e.v=C.v??e.v??0;e.ts=t;W.match(m);toast('Guardado: gol en el '+fmt(t));V.clip={mid:C.mid,i:C.i,mode:'view'};render(true)},
+ clipdl:()=>{const C=V.clip,m=M(C.mid),e=m.ev[C.i],x=vids(m)[e.v||0],src=x&&raw(x.u),key=C.mid+':'+C.i;if(!src)return toast('Este vídeo no se puede recortar.');
+  if(!window.MediaRecorder||!HTMLCanvasElement.prototype.captureStream)return toast('Este navegador no permite crear el clip. Prueba con Safari o Chrome actualizados.');
+  const pv=document.getElementById('clipv');if(pv)pv.pause();
+  const v=document.createElement('video');v.crossOrigin='anonymous';v.playsInline=true;v.setAttribute('playsinline','');v.preload='auto';v.src=src;v.style.cssText='position:fixed;left:-9999px;top:0;width:4px;height:4px';document.body.appendChild(v);
+  let ac=null;try{ac=new (window.AudioContext||window.webkitAudioContext)()}catch(_){}
+  const a=Math.max(0,e.ts-PRE),b=e.ts+POST;try{v.currentTime=a}catch(_){}
+  V.dlr={key,busy:true};const bt=document.querySelector('[data-act=clipdl]');if(bt)bt.disabled=true;const st=document.getElementById('dlst');if(st)st.textContent='Preparando el clip… (tarda lo que dura la jugada)';
+  const fail=err=>{v.remove();try{ac&&ac.close()}catch(_){}V.dlr=null;toast('No se ha podido crear el clip'+(err&&err.message?': '+err.message:'')+'.');if(V.clip)render(true)};
+  v.play().then(()=>recordClip(v,ac,a,b,m,e,key).then(()=>{toast('¡Clip listo! Pulsa «Guardar el vídeo del gol».');if(V.clip)render(true)}).catch(fail)).catch(fail)},
+ clipsave:async()=>{const f=V.dlr&&V.dlr.file;if(!f)return;try{if(navigator.canShare&&navigator.canShare({files:[f]})){await navigator.share({files:[f],title:f.name});return}}catch(e){if(e&&e.name==='AbortError')return}
+  const u=URL.createObjectURL(f),a=document.createElement('a');a.href=u;a.download=f.name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(u),60000)},
  clipuse:()=>{const cv=document.getElementById('clipv');if(!cv)return;const t=Math.round(cv.currentTime);document.getElementById('cmm').value=Math.floor(t/60);document.getElementById('css').value=String(t%60).padStart(2,'0');toast('Momento copiado: '+fmt(t))},
  clippp:()=>{const cv=document.getElementById('clipv');if(!cv)return;if(cv.paused)cv.play().catch(()=>{});else cv.pause()},
  clipprev:()=>{const cv=document.getElementById('clipv');if(!cv)return;const t=(+val('cmm')||0)*60+(+val('css')||0);V.clip.stop=t+POST;cv.currentTime=Math.max(0,t-PRE);cv.play().catch(()=>{})},
