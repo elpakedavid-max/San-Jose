@@ -146,11 +146,55 @@ revoke execute on function public.is_member(), public.is_staff(), public.profile
 revoke execute on function public.profiles_guard() from authenticated;
 grant execute on function public.is_member(), public.is_staff() to authenticated;
 
+
+-- ---------- Chat ----------
+create table if not exists public.messages (
+  id          bigint generated always as identity primary key,
+  channel     text not null check (channel = 'grupo' or channel like 'dm:%'),  -- 'grupo' o 'dm:<id de la familia>'
+  author      uuid default auth.uid() references auth.users on delete set null,
+  author_name text,
+  author_info text,
+  body        text not null check (char_length(body) between 1 and 2000),
+  created_at  timestamptz not null default now()
+);
+create index if not exists messages_channel_created on public.messages (channel, created_at desc);
+alter table public.messages enable row level security;
+create or replace function public.messages_guard() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare p record;
+begin
+  select pr.nombre, pr.apellidos, pr.role, pr.cargo, pr.admin, pl.n as hijo
+    into p from profiles pr left join players pl on pl.id = pr.pid where pr.id = auth.uid();
+  new.author := auth.uid();
+  new.created_at := now();
+  new.author_name := coalesce(p.nombre,'') || coalesce(' ' || left(p.apellidos,1) || '.', '');
+  new.author_info := case
+    when p.role = 'entrenador' then coalesce(nullif(p.cargo,''), 'Entrenador')
+    when p.role = 'familiar' and p.hijo is not null then 'Familia de ' || p.hijo
+    when p.role = 'jugador' then 'Jugador'
+    when p.admin then 'Administración'
+    else coalesce(nullif(p.cargo,''), 'Club') end;
+  return new;
+end $$;
+drop trigger if exists messages_guard on public.messages;
+create trigger messages_guard before insert on public.messages for each row execute function public.messages_guard();
+revoke execute on function public.messages_guard() from public, anon, authenticated;
+drop policy if exists "leer chat" on public.messages;
+create policy "leer chat" on public.messages for select using (
+  public.is_member() and (channel = 'grupo' or channel = 'dm:' || auth.uid()::text or public.is_staff()));
+drop policy if exists "escribir chat" on public.messages;
+create policy "escribir chat" on public.messages for insert with check (
+  public.is_member() and (channel = 'grupo' or channel = 'dm:' || auth.uid()::text or (public.is_staff() and channel like 'dm:%')));
+drop policy if exists "borrar chat" on public.messages;
+create policy "borrar chat" on public.messages for delete using (author = auth.uid() or public.is_staff());
+grant select, insert, delete on public.messages to authenticated;
+revoke all on public.messages from anon;
+
 -- ---------- Tiempo real (marcador en directo) ----------
 do $$
 declare t text;
 begin
-  foreach t in array array['profiles','players','matches','ratings','trainings','settings','media'] loop
+  foreach t in array array['profiles','players','matches','ratings','trainings','settings','media','messages'] loop
     if not exists (select 1 from pg_publication_tables
                    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
       execute format('alter publication supabase_realtime add table public.%I', t);
