@@ -190,6 +190,23 @@ create policy "borrar chat" on public.messages for delete using (author = auth.u
 grant select, insert, delete on public.messages to authenticated;
 revoke all on public.messages from anon;
 
+-- ---------- Fotos de perfil ----------
+alter table public.profiles add column if not exists avatar text;
+create or replace function public.member_cards()
+returns table (id uuid, name text, info text, avatar text)
+language sql stable security definer set search_path = public as $$
+  select pr.id, pr.nombre || coalesce(' ' || left(pr.apellidos,1) || '.', ''),
+         case when pr.role = 'entrenador' then coalesce(nullif(pr.cargo,''),'Entrenador')
+              when pr.role = 'familiar' and pl.n is not null then 'Familia de ' || pl.n
+              when pr.role = 'jugador' then 'Jugador'
+              else coalesce(nullif(pr.cargo,''),'Club') end,
+         pr.avatar
+  from profiles pr left join players pl on pl.id = pr.pid
+  where pr.approved and public.is_member();
+$$;
+revoke execute on function public.member_cards() from public, anon;
+grant execute on function public.member_cards() to authenticated;
+
 -- ---------- Tiempo real (marcador en directo) ----------
 do $$
 declare t text;
