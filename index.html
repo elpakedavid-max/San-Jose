@@ -303,6 +303,10 @@ medit:()=>{const m=M(V.mid);if(!m)return views.admin();const et=V.et||'gol',opt=
  <label>Dónde</label><div class="chips"><button class="chip ${m.local?'on':''}" data-act="eloc" data-v="1">En casa</button><button class="chip ${m.local?'':'on'}" data-act="eloc" data-v="0">Fuera</button></div>
  <label for="es">Estado</label><select id="es"><option value="prox" ${m.estado==='prox'?'selected':''}>Por jugar</option>${m.estado==='live'?'<option value="live" selected>En directo</option>':''}<option value="fin" ${m.estado==='fin'?'selected':''}>Jugado</option></select>
  <p class="err" id="err"></p><button class="btn sm" data-act="msave">Guardar datos</button></div>
+ <div class="card"><h3>👕 Quién jugó (${(V.jsel||m.tit).length})</h3><p class="sub">Marca a todos los que jugaron este partido: así cuenta en sus «Partidos jugados».</p>
+ <div class="pgrid">${S.players.map(p=>{const on=(V.jsel||m.tit).includes(p.id);return `<button class="pbtn" data-act="jtog" data-v="${p.id}" style="${on?'border:2px solid var(--ok);background:var(--soft)':'opacity:.6'}"><span class="dor">${tag(p)}</span><span>${esc(p.n)}</span></button>`}).join('')}</div>
+ <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px"><button class="btn ghost sm" data-act="jall">Marcar todos</button><button class="btn ghost sm" data-act="jnone">Ninguno</button></div>
+ ${V.jsel?'<button class="btn sm" data-act="jsave">Guardar quién jugó</button>':''}</div>
  ${vidbox(m)}
  <div class="card"><h3>Goles y acciones</h3>${m.ev.map((e,i)=>`<div class="row"><span class="grow">${evtxt(e)}${e.min!=null?` <span class="sub">· ${e.min}'</span>`:''}</span><button class="link" data-act="evdel" data-v="${i}">${V.evdel===i?'¿Quitar?':'Quitar'}</button></div>`).join('')||'<p class="sub">Sin acciones todavía.</p>'}
  <h3 style="margin-top:16px">Añadir acción</h3>
@@ -747,7 +751,7 @@ const ACT={
  stedit:v=>{V.ste=v===''?null:+v;V.stdel=null;render(true)},
  stsave:()=>{const n=val('sn'),c=val('sc'),t=val('st');if(!n)return err('Escribe el nombre.');const L=[...(S.staff||[])],x={n,c,t,...(V.ste>=0&&L[V.ste]?.f?{f:L[V.ste].f}:{})};if(V.ste>=0)L[V.ste]=x;else L.push(x);S.staff=L;V.ste=null;W.setting('staff',JSON.stringify(L));render(true)},
  stdel:()=>{if(!V.stdel){V.stdel=1;return render(true)}const L=[...(S.staff||[])];L.splice(V.ste,1);S.staff=L;V.ste=null;V.stdel=null;W.setting('staff',JSON.stringify(L));render(true)},
- medit:v=>{V.mid=+v;V.et='gol';V.evdel=null;V.view='medit';render()},
+ medit:v=>{V.mid=+v;V.et='gol';V.evdel=null;V.jsel=null;V.view='medit';render()},
  eloc:v=>{const m=M(V.mid);m.rival=val('er')||m.rival;m.fecha=val('ef')||m.fecha;m.local=v==='1';W.match(m);render(true)},
  msave:()=>{const m=M(V.mid),r=val('er'),f=val('ef'),e=val('es');if(!r)return err('Escribe el rival.');if(!f)return err('Pon la fecha.');m.rival=r;m.fecha=f;if(e!==m.estado){if(m.estado==='live'){m.acc=secs(m);m.run=null}m.estado=e}W.match(m);toast('Partido guardado');render(true)},
  evdel:v=>{if(V.evdel!==+v){V.evdel=+v;return render(true)}const m=M(V.mid);m.ev.splice(+v,1);V.evdel=null;W.match(m);render(true)},
@@ -788,6 +792,10 @@ const ACT={
  logs:async()=>{V.view='logs';V.lgn=200;V.logs=null;render();await loadLogs();if(V.view==='logs')render(true);sb.rpc('last_access').then(r=>{V.acc=r.data||[];if(V.view==='logs')render(true)})},
  lgv:v=>{V.lgv=v;render(true)},
  lgmore:async()=>{V.lgn=(V.lgn||200)+300;await loadLogs();render(true)},
+ jtog:v=>{const m=M(V.mid);v=+v;const L=[...(V.jsel||m.tit)];V.jsel=L.includes(v)?L.filter(x=>x!==v):[...L,v];render(true)},
+ jall:()=>{V.jsel=S.players.map(p=>p.id);render(true)},
+ jnone:()=>{V.jsel=[];render(true)},
+ jsave:()=>{const m=M(V.mid);m.tit=[...V.jsel];V.jsel=null;W.match(m);toast('Guardado: '+m.tit.length+' jugadores');render(true)},
  pickfiles:()=>document.getElementById('uf')?.click(),
  mview:v=>{V.mv=+v;V.mdel=null;render(true)},
  mvx:(v,el,e)=>{if(e.target===el){V.mv=null;render(true)}},
