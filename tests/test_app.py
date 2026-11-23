@@ -141,3 +141,19 @@ def test_familia_pone_foto_de_su_hijo(app, tmp_path):
     assert r
     app.click('[data-act=kphdel]'); app.wait_for_timeout(300)
     assert app.evaluate("window.__DB.players.find(x=>x.id==5).photo") is None
+
+
+def test_idioma_ingles(app):
+    login_coach(app)
+    add_match(app, [{"t": "gol", "min": 3, "pl": 5, "asis": 6, "tipo": "cabeza"}])
+    app.click('[data-act=tab][data-v=perfil]'); app.wait_for_timeout(150)
+    app.click('[data-act=lang][data-v=en]'); app.wait_for_timeout(200)
+    assert 'My profile' in app.inner_text('body')
+    app.click('[data-act=tab][data-v=stats]'); app.wait_for_timeout(200)
+    txt = app.inner_text('body')
+    assert 'How we score' in txt and 'Header' in txt and 'Estadísticas' not in txt
+    app.click('[data-act=tab][data-v=chat]'); app.wait_for_timeout(200)
+    app.fill('#mtxt', 'Gol de cabeza'); app.click('[data-act=msend]'); app.wait_for_timeout(300)
+    assert 'Gol de cabeza' in app.inner_text('#msgs')  # los mensajes no se traducen
+    app.click('[data-act=tab][data-v=perfil]'); app.click('[data-act=lang][data-v=es]'); app.wait_for_timeout(200)
+    assert 'Mi perfil' in app.inner_text('body')
