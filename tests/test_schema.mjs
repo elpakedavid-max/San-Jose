@@ -59,8 +59,17 @@ try {
   // Se eliminan las semillas existentes; todas las pruebas usan jugadores inventados.
   await db.exec('delete from public.players');
   for (const id of Object.values(ids)) await db.query('insert into auth.users(id) values ($1)', [id]);
-  await db.query(`insert into public.profiles(id,nombre,apellidos,role,approved,admin)
-    values ($1,'Técnico','Prueba','entrenador',true,true)`, [ids.staff]);
+  // Ni el primer entrenador puede darse permisos desde el registro público.
+  await as('staff', `insert into public.profiles(id,nombre,apellidos,role,approved,admin)
+    values (auth.uid(),'Técnico','Prueba','entrenador',true,true)`);
+  const first = (await as('staff', 'select approved,admin from profiles where id=auth.uid()')).rows[0];
+  assert.equal(first.approved, false);
+  assert.equal(first.admin, false);
+  assert.equal((await as('staff', 'select public.is_staff() as staff')).rows[0].staff, false);
+  assert.equal((await as('staff', 'select * from players')).rows.length, 0);
+  await assert.rejects(as('staff', `insert into players(id,n,p) values(100,'Prueba','MED')`), /row-level security/);
+  // Alta inicial hecha desde el panel privado, identificado por UUID.
+  await db.query('update profiles set approved=true,admin=true where id=$1', [ids.staff]);
   for (const who of ['family', 'peer', 'pending']) {
     await as(who, `insert into public.profiles(id,nombre,apellidos,role,pid)
       values (auth.uid(),'Familiar','Prueba','familiar',101)`);
@@ -140,6 +149,34 @@ try {
   await as('peer', `insert into media(id,path,thumb,kind) values(203,$1,$1,'foto')`, [secret]);
   await as('peer', `insert into messages(channel,body,audio) values('grupo','Referencia inventada',$1)`, [secret]);
   assert.equal(await visible('peer',secret), false, 'una referencia inventada no revela archivos ajenos');
+
+  // La edición de cualquier contenido publicado vuelve a la cola de moderación.
+  await as('staff', `insert into matches(id,rival,fecha) values(501,'Rival de prueba','2026-11-23')`);
+  for (const leaf of ['replacement.jpg','replacement-thumb.jpg']) {
+    await db.query("insert into storage.objects(bucket_id,name,owner_id) values('media',$1,$2)",
+      [file('family',leaf),ids.family]);
+  }
+  const edits = [
+    ['path',file('family','replacement.jpg')],
+    ['thumb',file('family','replacement-thumb.jpg')],
+    ['kind','video'], ['caption','Comentario nuevo'], ['match_id',501], ['season','2027/28']
+  ];
+  for (const [column, value] of edits) {
+    await as('staff','update media set approved=true where id=201');
+    // Los nombres de columna proceden exclusivamente de la lista fija anterior.
+    await as('family',`update media set ${column}=$1,approved=true where id=201`,[value]);
+    assert.equal((await as('family','select approved from media where id=201')).rows[0].approved,false,column);
+    assert.equal((await as('peer','select id from media where id=201')).rows.length,0,column);
+    assert.equal(await visible('peer',file('family','replacement.jpg')),false,column);
+  }
+  await as('staff','update media set approved=true where id=201');
+  assert.equal(await visible('peer',file('family','replacement.jpg')),true);
+  // Guardar sin cambios no obliga a moderar otra vez; una edición del técnico tampoco.
+  await as('family','update media set path=path,caption=caption where id=201');
+  assert.equal((await as('peer','select approved from media where id=201')).rows[0].approved,true);
+  await as('staff',"update media set caption='Revisado por técnico' where id=201");
+  assert.equal((await as('peer','select approved from media where id=201')).rows[0].approved,true);
+  console.log('OK: la sustitución de contenido requiere nueva aprobación');
   await as('staff', 'update profiles set approved=false where id=$1', [ids.family]);
   assert.equal(await visible('family',secret), false, 'la revocación también bloquea archivos propios');
   // El bucket también se comprueba aunque la ruta esté publicada.
@@ -148,6 +185,20 @@ try {
     [file('family','approved.jpg'),ids.family]);
   assert.equal((await as('staff', "select * from storage.objects where bucket_id='other'")).rows.length, 0);
   console.log('OK: RLS de archivos, audios privados, moderación, fotos compartidas y referencias inventadas');
+
+  // Si desaparece el último técnico, el registro no se convierte en recuperación pública.
+  await as('staff','update profiles set approved=false where id=auth.uid()');
+  await as('pending','delete from profiles where id=auth.uid()');
+  await as('pending',`insert into profiles(id,nombre,apellidos,role,approved,admin)
+    values(auth.uid(),'Alta','Prueba','entrenador',true,true)`);
+  assert.equal((await as('pending','select public.is_staff() as staff')).rows[0].staff,false);
+  assert.equal((await as('pending','select approved from profiles where id=auth.uid()')).rows[0].approved,false);
+  // La recuperación privada sigue funcionando y permite aprobar las altas posteriores.
+  await db.query('update profiles set approved=true,admin=true where id=$1',[ids.staff]);
+  await as('staff','update profiles set approved=true where id=$1',[ids.pending]);
+  assert.equal((await as('pending','select public.is_staff() as staff')).rows[0].staff,true);
+  console.log('OK: registro sin autoaprobación inicial ni al retirar el último técnico');
 } finally {
   await db.close();
 }
+

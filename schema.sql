@@ -93,9 +93,9 @@ language sql stable security definer set search_path = public as $$
   select exists (select 1 from profiles where id = auth.uid() and approved and (role = 'entrenador' or admin));
 $$;
 
--- Nadie se aprueba a sí mismo. Si no hay ningún entrenador ni administrador, el primer
--- entrenador que se registra queda aprobado; a partir de ahí, los administradores aprueban.
--- Para nombrar administrador desde el panel: update profiles set admin = true, approved = true where email = '...';
+-- Todas las altas públicas esperan aprobación, también los entrenadores.
+-- El primer administrador se configura desde el panel de Supabase, identificando
+-- su perfil por el UUID de Authentication → Users (no por el email editable del perfil).
 create or replace function public.profiles_guard() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
@@ -106,8 +106,7 @@ begin
     new.admin := false;
     -- La vinculación la establece el cuerpo técnico al aprobar el alta.
     new.pid := null;
-    new.approved := (new.role = 'entrenador'
-      and not exists (select 1 from profiles where approved and (role = 'entrenador' or admin)));
+    new.approved := false;
   elsif not public.is_staff() then
     new.approved := old.approved;
     new.role := old.role;
@@ -292,6 +291,11 @@ begin
   elsif not public.is_staff() then
     new.approved := old.approved;
     new.uploader := old.uploader;
+    -- Sustituir contenido publicado exige otra revisión del cuerpo técnico.
+    if row(new.path, new.thumb, new.kind, new.caption, new.match_id, new.season)
+       is distinct from row(old.path, old.thumb, old.kind, old.caption, old.match_id, old.season) then
+      new.approved := false;
+    end if;
   end if;
   return new;
 end $$;
@@ -390,4 +394,5 @@ begin
 end $$;
 revoke execute on function public.set_child_photo(bigint, text) from public, anon;
 grant execute on function public.set_child_photo(bigint, text) to authenticated;
+
 

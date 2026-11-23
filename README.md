@@ -47,7 +47,11 @@ Así los enlaces de "confirmar email" y "recuperar contraseña" vuelven a la app
 ### 5. Administradores
 Todo se gestiona en **Perfil → ⚙️ Administración**: solicitudes de acceso, usuarios (rol, cargo, jugador vinculado, dar o quitar administrador, quitar acceso), cuerpo técnico, plantilla y partidos (crear, editar datos y goles).
 
-Si no hay ningún administrador, el primer **entrenador** que se registra queda aprobado automáticamente. Cualquier miembro aprobado puede pasar a ser administrador desde **Perfil → Miembros del equipo → Hacer administrador**. Las solicitudes se validan en **Perfil → Solicitudes de acceso**, eligiendo a qué jugador se vincula cada familia.
+Todas las altas esperan aprobación, incluidos los entrenadores. Para configurar el primer administrador, registra su cuenta y completa su perfil. Después, desde el panel privado de Supabase, localiza esa cuenta en **Authentication → Users**, copia su **UUID** y busca exactamente ese `id` en **Table Editor → profiles**. Activa `approved` y `admin` para ese perfil. No uses el email del perfil para identificarlo: lo escribe el propio usuario.
+
+A partir de ahí, el cuerpo técnico gestiona las altas y los administradores desde **Perfil → Administración**. Si se retira el acceso al último técnico o administrador, la recuperación se hace desde el panel privado siguiendo el mismo procedimiento; el registro público nunca concede permisos automáticamente.
+
+**Eliminar mi perfil:** esta acción retira el perfil y el acceso aprobado, y cierra la sesión. Conserva la cuenta de inicio de sesión, mensajes, fotos, vídeos y registro de actividad. La misma cuenta puede volver a solicitar acceso. Para un borrado completo, hay que solicitarlo al administrador del club; esta versión no ofrece un borrado integral automático.
 
 ### 6. Invitar a los padres
 Manda el enlace por el grupo de WhatsApp. Cada padre se registra, elige "Familiar de jugador" y escribe el nombre de su hijo; el administrador lo valida.
@@ -77,3 +81,4 @@ Manda el enlace por el grupo de WhatsApp. Cada padre se registra, elige "Familia
 ## Pruebas y agentes
 
 Las pruebas automáticas están en `tests/` y se ejecutan solas en GitHub Actions (cada push, cada PR y cada mañana). Las instrucciones para agentes de IA (Codex, Claude Code) están en `AGENTS.md`.
+

@@ -15,7 +15,7 @@
  Q.prototype.delete=function(){this.op='delete';return this};
  Q.prototype.then=function(res,rej){const T=DB[this.t],m=x=>this.f.every(([k,v])=>x[k]==v);let out={error:null,data:null};
   if(this.op==='select'){const d=JSON.parse(JSON.stringify(T.filter(m)));out.data=this.single?(d[0]||null):d}
-  else if(this.op==='insert'){const r={...this.row};if(this.t==='profiles'){r.approved=r.role==='entrenador'&&!T.some(x=>x.approved&&(x.role==='entrenador'||x.admin));r.admin=false;r.created_at=Date.now()}if(this.t==='messages'){const me=DB.profiles.find(p=>p.id===sess.user.id);r.id=MID++;r.author=sess.user.id;r.author_name=me?me.nombre:'?';r.author_info=me&&me.role==='entrenador'?'Entrenador':'Familia';r.created_at=new Date(Date.now()+MID).toISOString()}if(this.t==='media'){const me=DB.profiles.find(p=>p.id===sess.user.id);r.uploader=sess.user.id;r.approved=!!me&&(me.role==='entrenador'||me.admin);r.created_at=new Date().toISOString()}T.push(r);fire()}
+  else if(this.op==='insert'){const r={...this.row};if(this.t==='profiles'){r.approved=false;r.admin=false;r.pid=null;r.created_at=Date.now()}if(this.t==='messages'){const me=DB.profiles.find(p=>p.id===sess.user.id);r.id=MID++;r.author=sess.user.id;r.author_name=me?me.nombre:'?';r.author_info=me&&me.role==='entrenador'?'Entrenador':'Familia';r.created_at=new Date(Date.now()+MID).toISOString()}if(this.t==='media'){const me=DB.profiles.find(p=>p.id===sess.user.id);r.uploader=sess.user.id;r.approved=!!me&&(me.role==='entrenador'||me.admin);r.created_at=new Date().toISOString()}T.push(r);fire()}
   else if(this.op==='upsert'){if(['players','matches'].includes(this.t)){const ex=T.find(x=>x.id==this.row.id);const me=DB.profiles.find(p=>p.id===sess?.user?.id);DB.audit_log.unshift({id:Date.now(),at:new Date().toISOString(),actor:sess.user.id,actor_name:me?me.nombre+' '+me.apellidos:'?',tbl:this.t,action:ex?'UPDATE':'INSERT',old:ex?JSON.parse(JSON.stringify(ex)):null,new:{...(ex||{}),...this.row}})}const key=this.t==='ratings'?['match_id','player_id']:this.t==='settings'?['key']:['id'];const i=T.findIndex(x=>key.every(k=>x[k]==this.row[k]));if(i>=0)Object.assign(T[i],this.row);else T.push({...this.row});fire()}
   else if(this.op==='update'){T.filter(m).forEach(x=>Object.assign(x,this.row));fire()}
   else if(this.op==='delete'){DB[this.t]=T.filter(x=>!m(x));fire()}
@@ -28,3 +28,4 @@
   channel:()=>{const c={on:(a,b,f)=>{subs.push(f);return c},subscribe:()=>c};return c},removeChannel:()=>{}
  })};
 })();
+

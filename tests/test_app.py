@@ -36,12 +36,16 @@ def app(browser):
     pg.close()
 
 
-def login_coach(pg):
+def login_coach(pg, approved=True):
     pg.fill('#em', 'coach@x.es'); pg.fill('#pw', '12345678'); pg.click('[data-act=login]'); pg.wait_for_timeout(300)
     pg.click('[data-act=role][data-v=entrenador]'); pg.click('[data-act=go][data-v=reg]')
     pg.fill('#f-n', 'D'); pg.fill('#f-a', 'X'); pg.click('[data-act=next]')
     pg.fill('#f-t', '600000000'); pg.click('[data-act=next]'); pg.click('[data-act=next]')
     pg.check('#c1'); pg.click('[data-act=next]'); pg.wait_for_timeout(300)
+    if approved:
+        # Alta del primer administrador desde el panel privado, no desde el registro.
+        pg.evaluate("()=>{Object.assign(window.__DB.profiles.find(x=>x.id==='coach'),{approved:true,admin:true});window.__fire()}")
+        pg.wait_for_timeout(500)
 
 
 def add_match(pg, ev):
@@ -52,6 +56,40 @@ def add_match(pg, ev):
 def test_pantalla_de_acceso(app):
     assert app.locator('#em').is_visible()
     assert app.locator('[data-act=login]').is_visible()
+
+
+def test_primer_entrenador_espera_aprobacion(app):
+    login_coach(app, approved=False)
+    assert app.get_by_text('⏳ Pendiente de aprobación', exact=True).is_visible()
+    assert app.evaluate("window.__DB.profiles[0].approved") is False
+    assert app.locator('[data-act=tab]').count() == 0
+
+
+def test_eliminar_perfil_explica_datos_conservados(app):
+    login_familia(app)
+    app.click('[data-act=tab][data-v=perfil]')
+    card = app.locator('#profile-removal')
+    assert 'cuenta de inicio de sesión, mensajes, fotos, vídeos y registro de actividad' in card.inner_text()
+    assert 'borrado completo' in card.inner_text()
+    assert app.get_by_text('Borrar mis datos', exact=True).count() == 0
+    card.locator('[data-act=delme]').click()
+    assert app.evaluate("window.__DB.profiles.some(p=>p.id==='fam')")
+    assert card.get_by_role('button', name='Pulsa otra vez para eliminar solo tu perfil').is_visible()
+    card.locator('[data-act=delme]').click()
+    app.wait_for_timeout(300)
+    assert not app.evaluate("window.__DB.profiles.some(p=>p.id==='fam')")
+    assert app.locator('#em').is_visible()
+
+
+def test_eliminar_perfil_ingles(app):
+    login_familia(app)
+    app.click('[data-act=tab][data-v=perfil]')
+    app.click('[data-act=lang][data-v=en]')
+    card = app.locator('#profile-removal')
+    assert card.get_by_role('button', name='Remove my profile', exact=True).is_visible()
+    assert 'messages, photos, videos and activity log remain' in card.inner_text()
+    card.locator('[data-act=delme]').click()
+    assert card.get_by_role('button', name='Tap again to remove only your profile').is_visible()
 
 
 def test_todas_las_pestanas_cargan(app):
@@ -167,3 +205,4 @@ def test_guia_de_registro(app):
     app.click('[data-act=lang][data-v=en]'); app.click('[data-act=help]'); app.wait_for_timeout(200)
     assert app.locator('img[src="guia/en-3.jpg"]').count() == 1
     assert 'How to sign up' in app.inner_text('body')
+
