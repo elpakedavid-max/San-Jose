@@ -157,3 +157,13 @@ def test_idioma_ingles(app):
     assert 'Gol de cabeza' in app.inner_text('#msgs')  # los mensajes no se traducen
     app.click('[data-act=tab][data-v=perfil]'); app.click('[data-act=lang][data-v=es]'); app.wait_for_timeout(200)
     assert 'Mi perfil' in app.inner_text('body')
+
+
+def test_guia_de_registro(app):
+    app.click('[data-act=help]'); app.wait_for_timeout(200)
+    assert app.locator('img[src="guia/es-1.jpg"]').count() == 1
+    app.click('.pad [data-act=go]'); app.wait_for_timeout(150)
+    assert app.locator('#em').is_visible()
+    app.click('[data-act=lang][data-v=en]'); app.click('[data-act=help]'); app.wait_for_timeout(200)
+    assert app.locator('img[src="guia/en-3.jpg"]').count() == 1
+    assert 'How to sign up' in app.inner_text('body')
