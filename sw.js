@@ -1,6 +1,6 @@
 // Service worker: la app abre rápido y sin cobertura muestra la última versión.
 // Los datos (Supabase) nunca se guardan en caché.
-const CACHE = 'sanjose-v34';
+const CACHE = 'sanjose-v35';
 const SHELL = [
   './', './index.html', './config.js', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './apple-touch-icon.png',
@@ -58,3 +58,4 @@ self.addEventListener('fetch', e => {
     })));
   }
 });
+

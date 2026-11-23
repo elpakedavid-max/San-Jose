@@ -17,6 +17,13 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Permisos SQL e instalación desde cero (PostgreSQL aislado)
+        run: |
+          npm install --no-save --package-lock=false --ignore-scripts @electric-sql/pglite@0.3.14
+          node tests/test_schema.mjs
       - name: Instalar Playwright
         run: |
           pip install pytest playwright
@@ -35,3 +42,4 @@ jobs:
         env:
           LIVE: '1'
         run: pytest -q tests/test_live.py
+
