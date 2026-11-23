@@ -29,3 +29,12 @@ GitHub Actions (`.github/workflows/pruebas.yml`) las ejecuta en cada push, en ca
 - Cambios pequeños y en una rama con PR; no hagas push directo a `main` salvo que el dueño lo pida.
 - Mantén la app en un solo fichero, sin dependencias nuevas ni paso de compilación, y en español.
 - Diseño pensado para móvil (iPhone): prueba con viewport 390×844.
+
+## Pautas de revisión de código (para revisiones automáticas de PR)
+Marca como problema grave:
+- Cualquier dato real de menores, clave secreta o token añadido al repo.
+- Cambios que relajen la seguridad de Supabase (RLS, `is_staff`, `is_member`, `profiles_guard`, `media_guard`, `messages_guard`) o que dejen ver datos a usuarios no aprobados.
+- Cambios publicados en `index.html` sin subir `CACHE` en `sw.js`.
+- Que `sw.js` pase a interceptar peticiones de vídeo/audio o con cabecera Range (rompe los vídeos en iPhone).
+- Errores de JavaScript, pruebas en rojo o funciones nuevas sin prueba.
+- Textos de la app que no estén en español o que no se vean bien en un móvil de 390 px.
