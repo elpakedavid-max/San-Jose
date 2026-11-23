@@ -206,3 +206,24 @@ def test_guia_de_registro(app):
     assert app.locator('img[src="guia/en-3.jpg"]').count() == 1
     assert 'How to sign up' in app.inner_text('body')
 
+
+def test_mejor_jugada_y_paradas(app):
+    login_coach(app)
+    add_match(app, [{"t": "parada", "min": 4, "pl": 5}])
+    app.evaluate("()=>{window.__DB.matches[0].video=JSON.stringify([{t:'Primera parte',u:'https://x/v.mp4'}]);window.__fire()}")
+    app.wait_for_timeout(300)
+    app.click('[data-act=tab][data-v=partidos]'); app.click('[data-act=match]'); app.click('[data-act=medit]')
+    app.select_option('#et', 'top'); app.wait_for_timeout(150)
+    app.select_option('#ep', '6'); app.fill('#edesc', 'Regate y pase')
+    app.click('[data-act=evadd]'); app.wait_for_timeout(150)
+    ev = app.evaluate("window.__DB.matches[0].ev[1]")
+    assert ev['t'] == 'top' and ev['pl'] == 6 and ev['desc'] == 'Regate y pase'
+    assert app.locator('[data-act=clip], [data-act=clipmark], button:has-text("Marcar")').count() >= 1
+
+
+def test_mejores_jugadas_en_estadisticas(app):
+    login_coach(app)
+    add_match(app, [{"t": "parada", "min": 4, "pl": 5}, {"t": "top", "min": 8, "pl": 6, "desc": "Regate"}])
+    app.click('[data-act=tab][data-v=stats]'); app.wait_for_timeout(200)
+    txt = app.inner_text('body')
+    assert 'Mejores jugadas y paradas (2)' in txt and 'Regate' in txt
