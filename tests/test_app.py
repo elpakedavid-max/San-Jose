@@ -94,3 +94,26 @@ def test_chat_envia_mensaje(app):
     app.click('[data-act=tab][data-v=chat]'); app.wait_for_timeout(200)
     app.fill('#mtxt', 'Hola equipo'); app.click('[data-act=msend]'); app.wait_for_timeout(200)
     assert app.evaluate("window.__DB.messages.some(m=>m.text==='Hola equipo'||m.body==='Hola equipo'||JSON.stringify(m).includes('Hola equipo'))")
+
+
+def test_gol_en_propia_no_permite_atribuir_jugador_ni_asistencia(app):
+    login_coach(app)
+    add_match(app, [{"t": "gol", "min": 10, "pl": None, "asis": 0, "tipo": "propia"}])
+    app.click('[data-act=tab][data-v=partidos]')
+    app.click('[data-act=match]')
+    app.click('[data-act=medit]')
+
+    assert app.get_by_text('Gol en propia puerta del rival', exact=False).is_visible()
+    assert app.locator('[data-chg=evpl][data-v="0"]').count() == 0
+    assert app.locator('[data-chg=evas][data-v="0"]').count() == 0
+
+    app.select_option('[data-chg=evty][data-v="0"]', 'jugada')
+    scorer = app.locator('[data-chg=evpl][data-v="0"]')
+    assert scorer.input_value() == '0'
+    scorer.select_option('5')
+    assert app.evaluate('window.__DB.matches[0].ev[0].pl') == 5
+    app.select_option('[data-chg=evas][data-v="0"]', '6')
+
+    app.select_option('[data-chg=evty][data-v="0"]', 'propia')
+    event = app.evaluate('window.__DB.matches[0].ev[0]')
+    assert event['pl'] is None and event['asis'] == 0
