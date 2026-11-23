@@ -26,6 +26,8 @@ jobs:
           python3 -c "import re;s=open('index.html').read();open('/tmp/app.js','w').write(re.search(r'<script>\n(\{.*\})\n</script>',s,re.S).group(1))"
           node --check /tmp/app.js
           node --check sw.js
+      - name: Pruebas de caché del service worker
+        run: node tests/test_sw.cjs
       - name: Pruebas de la app (Supabase simulado)
         run: pytest -q tests/test_app.py
       - name: Comprobar la web publicada

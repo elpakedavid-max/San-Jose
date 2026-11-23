@@ -1,6 +1,6 @@
 // Service worker: la app abre rápido y sin cobertura muestra la última versión.
 // Los datos (Supabase) nunca se guardan en caché.
-const CACHE = 'sanjose-v28';
+const CACHE = 'sanjose-v30';
 const SHELL = [
   './', './index.html', './config.js', './manifest.webmanifest',
   './icon-192.png', './icon-512.png', './apple-touch-icon.png',
@@ -35,16 +35,25 @@ self.addEventListener('fetch', e => {
     // "no-cache": pregunta siempre al servidor si hay versión nueva (evita ver la app antigua).
     e.respondWith(
       fetch(req, { cache: 'no-cache' }).then(res => {
-        const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(req, copy));
+        if (res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
+        }
         return res;
-      }).catch(() => caches.match(req).then(r => r || caches.match('./index.html')))
+      }).catch(async () => {
+        const cached = await caches.match(req);
+        if (cached) return cached;
+        if (req.mode === 'navigate') return (await caches.match('./index.html')) || Response.error();
+        return Response.error();
+      })
     );
   } else {
     // Librerías y fuentes: primero la caché.
     e.respondWith(caches.match(req).then(r => r || fetch(req).then(res => {
-      const copy = res.clone();
-      caches.open(CACHE).then(c => c.put(req, copy));
+      if (res.ok || res.type === 'opaque') {
+        const copy = res.clone();
+        caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
+      }
       return res;
     })));
   }
