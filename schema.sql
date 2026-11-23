@@ -68,6 +68,20 @@ create table if not exists public.settings (
   value  text
 );
 
+-- La tabla debe existir antes de crear sus triggers y activar Realtime.
+create table if not exists public.media (
+  id            bigint primary key,
+  path          text not null,
+  thumb         text,
+  kind          text not null check (kind in ('foto','video')),
+  match_id      bigint references public.matches on delete set null,
+  caption       text,
+  uploader      uuid default auth.uid() references auth.users on delete set null,
+  uploader_name text,
+  approved      boolean not null default false,   -- lo de las familias espera a que lo apruebe un administrador
+  created_at    timestamptz not null default now()
+);
+
 -- ---------- Quién es quién ----------
 create or replace function public.is_member() returns boolean
 language sql stable security definer set search_path = public as $$
@@ -79,9 +93,9 @@ language sql stable security definer set search_path = public as $$
   select exists (select 1 from profiles where id = auth.uid() and approved and (role = 'entrenador' or admin));
 $$;
 
--- Nadie se aprueba a sí mismo. Si no hay ningún entrenador ni administrador, el primer
--- entrenador que se registra queda aprobado; a partir de ahí, los administradores aprueban.
--- Para nombrar administrador desde el panel: update profiles set admin = true, approved = true where email = '...';
+-- Todas las altas públicas esperan aprobación, también los entrenadores.
+-- El primer administrador se configura desde el panel de Supabase, identificando
+-- su perfil por el UUID de Authentication → Users (no por el email editable del perfil).
 create or replace function public.profiles_guard() returns trigger
 language plpgsql security definer set search_path = public as $$
 begin
@@ -90,12 +104,14 @@ begin
   end if;
   if tg_op = 'INSERT' then
     new.admin := false;
-    new.approved := (new.role = 'entrenador'
-      and not exists (select 1 from profiles where approved and (role = 'entrenador' or admin)));
+    -- La vinculación la establece el cuerpo técnico al aprobar el alta.
+    new.pid := null;
+    new.approved := false;
   elsif not public.is_staff() then
     new.approved := old.approved;
     new.role := old.role;
     new.admin := old.admin;
+    new.pid := old.pid;
   end if;
   return new;
 end $$;
@@ -263,18 +279,6 @@ begin
 end $$;
 
 -- ---------- Fotos y vídeos ----------
-create table if not exists public.media (
-  id            bigint primary key,
-  path          text not null,
-  thumb         text,
-  kind          text not null check (kind in ('foto','video')),
-  match_id      bigint references public.matches on delete set null,
-  caption       text,
-  uploader      uuid default auth.uid() references auth.users on delete set null,
-  uploader_name text,
-  approved      boolean not null default false,   -- lo de las familias espera a que lo apruebe un administrador
-  created_at    timestamptz not null default now()
-);
 alter table public.media enable row level security;
 
 create or replace function public.media_guard() returns trigger
@@ -287,6 +291,11 @@ begin
   elsif not public.is_staff() then
     new.approved := old.approved;
     new.uploader := old.uploader;
+    -- Sustituir contenido publicado exige otra revisión del cuerpo técnico.
+    if row(new.path, new.thumb, new.kind, new.caption, new.match_id, new.season)
+       is distinct from row(old.path, old.thumb, old.kind, old.caption, old.match_id, old.season) then
+      new.approved := false;
+    end if;
   end if;
   return new;
 end $$;
@@ -313,7 +322,25 @@ values ('media', 'media', false, 52428800, array['image/*','video/*','audio/*'])
 on conflict (id) do update set public = false, file_size_limit = 52428800, allowed_mime_types = array['image/*','video/*','audio/*'];
 drop policy if exists "sj media leer" on storage.objects;
 create policy "sj media leer" on storage.objects for select to authenticated
-  using (bucket_id = 'media' and public.is_member());
+  using (bucket_id = 'media' and public.is_member() and (
+    public.is_staff()
+    or owner_id = auth.uid()::text
+    -- Estas consultas respetan el RLS de media y messages: aprobación y canal.
+    -- La carpeta debe coincidir con quien subió el archivo para que una referencia
+    -- inventada no permita publicar o escuchar archivos privados de otra persona.
+    or exists (select 1 from public.media m
+      where (m.path = objects.name or m.thumb = objects.name)
+        and starts_with(objects.name, m.uploader::text || '/'))
+    or exists (select 1 from public.messages m
+      where m.audio = objects.name and starts_with(objects.name, m.author::text || '/'))
+    -- Fotos visibles en las fichas del equipo, sin exponer otros archivos.
+    or exists (select 1 from public.players p where p.photo = objects.name)
+    or exists (select 1 from public.member_cards() c
+      where c.avatar = objects.name and starts_with(objects.name, c.id::text || '/'))
+    or exists (select 1 from public.settings s
+      where s.key = 'staff'
+        and s.value::jsonb @> jsonb_build_array(jsonb_build_object('f', objects.name)))
+  ));
 drop policy if exists "sj media subir" on storage.objects;
 create policy "sj media subir" on storage.objects for insert to authenticated
   with check (bucket_id = 'media' and public.is_member() and (storage.foldername(name))[1] = auth.uid()::text);
@@ -367,3 +394,5 @@ begin
 end $$;
 revoke execute on function public.set_child_photo(bigint, text) from public, anon;
 grant execute on function public.set_child_photo(bigint, text) to authenticated;
+
+
