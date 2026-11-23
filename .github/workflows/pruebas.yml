@@ -1,0 +1,35 @@
+name: Pruebas de la app
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '17 6 * * *'   # cada día ~07:17 (hora de Madrid en invierno)
+  workflow_dispatch:
+
+jobs:
+  pruebas:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Instalar Playwright
+        run: |
+          pip install pytest playwright
+          playwright install --with-deps chromium
+      - name: Sintaxis del JavaScript
+        run: |
+          python3 -c "import re;s=open('index.html').read();open('/tmp/app.js','w').write(re.search(r'<script>\n(\{.*\})\n</script>',s,re.S).group(1))"
+          node --check /tmp/app.js
+          node --check sw.js
+      - name: Pruebas de la app (Supabase simulado)
+        run: pytest -q tests/test_app.py
+      - name: Comprobar la web publicada
+        if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+        env:
+          LIVE: '1'
+        run: pytest -q tests/test_live.py

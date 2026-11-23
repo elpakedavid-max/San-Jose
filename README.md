@@ -73,3 +73,7 @@ Manda el enlace por el grupo de WhatsApp. Cada padre se registra, elige "Familia
 | `config.js` | Conexión con Supabase |
 | `schema.sql` | Tablas, permisos y plantilla inicial |
 | `sw.js`, `manifest.webmanifest`, `icon-*.png` | Para que se instale como app y abra rápido |
+
+## Pruebas y agentes
+
+Las pruebas automáticas están en `tests/` y se ejecutan solas en GitHub Actions (cada push, cada PR y cada mañana). Las instrucciones para agentes de IA (Codex, Claude Code) están en `AGENTS.md`.
