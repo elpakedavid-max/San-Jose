@@ -346,3 +346,24 @@ insert into public.players (id, n, p, dem, pie, cual, seasons) values
   (13, 'Christofer',     'MED', 'Interior por banda izquierda o derecha', 'Diestro', 'Muy rápido conduciendo la pelota.', array['2026/27']),
   (14, 'Enrico',         'DEL', 'Delantero',                              'Diestro', 'Muy habilidoso y rápido.', array['2026/27'])
 on conflict (id) do nothing;
+
+-- ---------- Las familias ponen la foto de su hijo/a ----------
+-- Solo puede cambiar la foto del jugador al que está vinculada (profiles.pid),
+-- con un archivo subido a su propia carpeta. El resto de datos del jugador sigue
+-- siendo solo del cuerpo técnico. Devuelve la foto anterior.
+create or replace function public.set_child_photo(p_player bigint, p_path text)
+returns text language plpgsql security definer set search_path = public as $$
+declare old text;
+begin
+  if not exists (select 1 from profiles where id = auth.uid() and approved and pid = p_player) then
+    raise exception 'Solo puedes cambiar la foto de tu hijo/a';
+  end if;
+  if p_path is not null and p_path not like auth.uid()::text || '/%' then
+    raise exception 'Archivo no válido';
+  end if;
+  select photo into old from players where id = p_player;
+  update players set photo = p_path where id = p_player;
+  return old;
+end $$;
+revoke execute on function public.set_child_photo(bigint, text) from public, anon;
+grant execute on function public.set_child_photo(bigint, text) to authenticated;

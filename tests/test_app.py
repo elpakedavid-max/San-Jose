@@ -117,3 +117,27 @@ def test_gol_en_propia_no_permite_atribuir_jugador_ni_asistencia(app):
     app.select_option('[data-chg=evty][data-v="0"]', 'propia')
     event = app.evaluate('window.__DB.matches[0].ev[0]')
     assert event['pl'] is None and event['asis'] == 0
+
+
+def login_familia(pg, pid=5):
+    pg.evaluate("pid=>window.__DB.profiles.push({id:'fam',approved:true,role:'familiar',pid,nombre:'Ana',apellidos:'Prueba',email:'fam@x.es',admin:false})", pid)
+    pg.fill('#em', 'fam@x.es'); pg.fill('#pw', '12345678'); pg.click('[data-act=login]'); pg.wait_for_timeout(500)
+
+
+def test_familia_pone_foto_de_su_hijo(app, tmp_path):
+    login_familia(app)
+    img = tmp_path / 'f.png'
+    app.evaluate("""async()=>{const c=document.createElement('canvas');c.width=c.height=40;c.getContext('2d').fillRect(0,0,40,40);window.__png=c.toDataURL('image/png')}""")
+    import base64
+    img.write_bytes(base64.b64decode(app.evaluate("window.__png").split(',')[1]))
+    app.click('[data-act=tab][data-v=perfil]') if app.locator('[data-act=tab][data-v=perfil]').count() else None
+    app.click('button.av'); app.wait_for_timeout(200)
+    assert 'Foto de Tadeo' in app.inner_text('body')
+    app.set_input_files('#kphf', str(img)); app.wait_for_timeout(800)
+    photo = app.evaluate("window.__DB.players.find(x=>x.id==5).photo")
+    assert photo and photo.startswith('fam/child_5_')
+    # no puede cambiar la de otro jugador
+    r = app.evaluate("async()=>{const r=await window.supabase.createClient().rpc('set_child_photo',{p_player:6,p_path:'fam/x.jpg'});return !!r.error}")
+    assert r
+    app.click('[data-act=kphdel]'); app.wait_for_timeout(300)
+    assert app.evaluate("window.__DB.players.find(x=>x.id==5).photo") is None
