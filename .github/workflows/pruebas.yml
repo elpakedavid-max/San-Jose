@@ -100,7 +100,7 @@ jobs:
           if current != os.environ['GITHUB_SHA']:
               raise SystemExit('main avanzó: esta revisión no se publica')
           PY
-      - uses: actions/deploy-pages@v4
+      - uses: actions/deploy-pages@v5
         id: deployment
 
   smoke:
