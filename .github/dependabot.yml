@@ -1,0 +1,9 @@
+# Mantiene al día las acciones de GitHub que usan los flujos (parches de seguridad incluidos).
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    cooldown:
+      default-days: 7   # espera una semana antes de proponer versiones nuevas
