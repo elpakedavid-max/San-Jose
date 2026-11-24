@@ -177,6 +177,12 @@ function accessBlocked(profile){
  accessEpoch++;privateStateClear();S.user=profile||null;
  V.view=profile?'pending':'rol';V.email=session?.user.email||'';listen();render();
 }
+function profileAccepted(profile){
+ const previous=S.user;
+ const changed=previous&&(previous.role!==profile.role||!!previous.admin!==!!profile.admin||previous.pid!==profile.pid);
+ if(changed){accessEpoch++;privateStateClear();V.view='loading'}
+ S.user=profile;listen();if(changed)render();return !!changed;
+}
 function localSessionEnd(){
  accessEpoch++;const ctx=authContext;if(ctx){ctx.closed=true;ctx.memory.clear()}
  authSubscription?.unsubscribe();authSubscription=null;sb?.auth.stopAutoRefresh?.();
@@ -271,11 +277,11 @@ async function loadMedia(){
 }
 async function boot(){
  if(!session){S.user=null;if(!['signup','forgot'].includes(V.view))V.view='login';return render()}
- const task=authTask(),client=task.client;
+ let task=authTask();const client=task.client;
  const {data:u,error}=await client.from('profiles').select('*').eq('id',task.uid).maybeSingle();if(!isCurrent(task))return;
  if(error){toast('No se ha podido comprobar el acceso. Inténtalo de nuevo.');return}
  if(!u||!u.approved)return accessBlocked(u);
- S.user=u;listen();await loadAll();if(!canRead(task))return;
+ profileAccepted(u);task=authTask();await loadAll();if(!canRead(task))return;
  if(['loading','login','signup','forgot','rol','intro','reg','pending','newpw'].includes(V.view))V.view='app';
  if(coach()&&CFG.dropboxKey)dbxLoad().catch(()=>{});
  render();
@@ -288,11 +294,12 @@ let msgT=null;function onMsg(pl){const task=authTask();clearTimeout(msgT);msgT=s
 function paintChat(){if(!hasAccess())return;if(V.view==='app'&&V.tab==='chat'){const box=document.getElementById('msgs');if(box){const atEnd=box.getBoundingClientRect().bottom<=innerHeight+120;box.innerHTML=msgList();markSeen();if(atEnd)scrollChat()}}
  const b=document.getElementById('chatbadge');const n=unreadAll();if(b){b.textContent=n>99?'99+':n;b.style.display=n?'grid':'none'}}
 async function refresh(){if(!session)return;if(!S.user?.approved)return boot();
- const task=authTask(),client=task.client;
+ let task=authTask();const client=task.client;
  const {data:u,error}=await client.from('profiles').select('*').eq('id',task.uid).maybeSingle();if(!isCurrent(task))return;
  if(error){toast('No se ha podido comprobar el acceso. Inténtalo de nuevo.');return}
  if(!u||!u.approved)return accessBlocked(u);
- S.user=u;await loadAll();if(!canRead(task))return;
+ const changed=profileAccepted(u);task=authTask();await loadAll();if(!canRead(task))return;
+ if(changed){V.view='app';return render()}
  if(!['reg','pedit','newm','lineup','lista','medit'].includes(V.view)&&!V.sh&&!V.mv&&!V.clip&&!V.uploading&&!(V.view==='app'&&V.tab==='chat')&&!document.activeElement?.matches('input,select'))render(true)}
 const V={view:REMOTE?'loading':S.user?'app':'login',tab:'inicio',reg:{},step:1,rank:'gol',cmp:[1,2]};
 const app=document.getElementById('app');

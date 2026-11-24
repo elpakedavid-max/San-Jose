@@ -93,5 +93,12 @@ const deferred = () => {let resolve;const promise=new Promise(r=>resolve=r);retu
     const h=harness();h.api.ensureAuthClient();h.api.setUser('a');h.api.fill();h.setProfile(null);
     await h.api.refresh();assert.equal(h.api.snapshot().view,'rol');assert.equal(h.api.snapshot().people,0);
   }
+  {
+    const h=harness();h.api.ensureAuthClient();h.api.setUser('a');h.api.fill();
+    Object.assign(h.box.S.user,{role:'entrenador',admin:true});h.box.V.view='medit';
+    h.setProfile({id:'a',approved:true,role:'familiar',admin:false});await h.api.refresh();
+    const state=h.api.snapshot();assert.equal(state.view,'app');assert.equal(state.people+state.msgs+state.urls,0);
+    assert.equal(state.logs,undefined);assert.equal(h.box.S.user.role,'familiar');
+  }
   console.log('OK: logout sin red, cliente retirado, cambio de cuenta, revocación y respuestas tardías');
 })().catch(e=>{console.error(e);process.exitCode=1});
