@@ -1,9 +1,9 @@
 // Mock mínimo de supabase-js para probar el flujo remoto
 (function(){
  const DB=window.__DB={profiles:[],players:[{id:1,n:'Raúl',p:'POR',d:null,dem:'Portero',pie:'Diestro',cual:null,seasons:['2026/27']},{id:2,n:'Gonzalo',p:'DEF',d:null,dem:'Lateral izquierdo',pie:'Zurdo',cual:'Rápido',seasons:['2026/27']},{id:6,n:'Nico',p:'DEL',d:null,dem:'Delantero',pie:'Diestro',cual:null,seasons:['2026/27']},{id:5,n:'Tadeo',p:'MED',d:null,dem:'Mediocentro',pie:'Diestro',cual:null,seasons:['2026/27']},{id:3,n:'Lucas',p:'DEF',d:null,dem:'Central',pie:'Diestro',cual:null,seasons:['2026/27']}],matches:[],ratings:[],trainings:[],settings:[{key:'seasons',value:'["2026/27"]'},{key:'season',value:'2026/27'}],media:[],messages:[],audit_log:[]};const FILES={};let MID=1;
- let cb=null,sess=null,subs=[];
+ let cb=null,sess=null,subs=[],authStorage=null,authKey='';
  const fire=()=>setTimeout(()=>subs.forEach(f=>f()),10);
- window.__login=(id)=>{sess={user:{id,email:id+'@x.es'}};cb&&cb('SIGNED_IN',sess)};
+ window.__login=(id)=>{sess={user:{id,email:id+'@x.es'},access_token:'synthetic-token'};authStorage?.setItem(authKey,JSON.stringify(sess));cb&&cb('SIGNED_IN',sess)};
  window.__fire=fire;
  function Q(t){this.t=t;this.f=[];this.op='select'}
  Q.prototype.select=function(){return this};Q.prototype.order=function(){return this};Q.prototype.limit=function(){return this};
@@ -20,12 +20,13 @@
   else if(this.op==='update'){T.filter(m).forEach(x=>Object.assign(x,this.row));fire()}
   else if(this.op==='delete'){DB[this.t]=T.filter(x=>!m(x));fire()}
   return Promise.resolve(out).then(res,rej)};
- window.supabase={createClient:()=>({
+ window.supabase={createClient:(url,key,options={})=>{authStorage=options.auth?.storage;authKey=options.auth?.storageKey||'test-auth';try{sess=JSON.parse(authStorage?.getItem(authKey)||'null')}catch(_){sess=null}return ({
   from:t=>new Q(t),
   rpc:async(n,a)=>n==='set_child_photo'?(()=>{const me=DB.profiles.find(p=>p.id===sess?.user?.id);if(!me||!me.approved||me.pid!=a.p_player)return{data:null,error:{message:'Solo puedes cambiar la foto de tu hijo/a'}};const pl=DB.players.find(x=>x.id==a.p_player),old=pl.photo||null;pl.photo=a.p_path;fire();return{data:old,error:null}})():n==='last_access'?({data:DB.profiles.map(p=>({id:p.id,last_sign_in_at:new Date().toISOString()})),error:null}):({data:DB.profiles.filter(p=>p.approved).map(p=>({id:p.id,name:p.nombre,info:p.role,avatar:p.avatar||null})),error:null}),
-  auth:{onAuthStateChange:f=>{cb=f;setTimeout(()=>f('INITIAL_SESSION',sess),0)},signInWithPassword:async({email})=>{window.__login(email.split('@')[0]);return {error:null}},signUp:async()=>({data:{session:null},error:null}),signOut:async()=>{sess=null;cb('SIGNED_OUT',null);return{}},resetPasswordForEmail:async()=>({}),updateUser:async()=>({}),signInWithOAuth:async()=>({error:{message:'x'}})},
+  auth:{stopAutoRefresh:()=>{},onAuthStateChange:f=>{cb=f;setTimeout(()=>f('INITIAL_SESSION',sess),0);return{data:{subscription:{unsubscribe:()=>{if(cb===f)cb=null}}}}},signInWithPassword:async({email})=>{window.__login(email.split('@')[0]);return {error:null}},signUp:async()=>({data:{session:null},error:null}),signOut:async()=>{sess=null;cb('SIGNED_OUT',null);return{}},resetPasswordForEmail:async()=>({}),updateUser:async()=>({}),signInWithOAuth:async()=>({error:{message:'x'}})},
   storage:{from:()=>({upload:async(p,b)=>{FILES[p]=b;return{error:null}},createSignedUrls:async(ps)=>({data:ps.map(p=>({path:p,signedUrl:FILES[p]?URL.createObjectURL(FILES[p]):''}))}),createSignedUrl:async(p)=>({data:{signedUrl:'about:blank'},error:null}),remove:async(ps)=>{ps.forEach(p=>delete FILES[p]);return{}}})},
-  channel:()=>{const c={on:(a,b,f)=>{subs.push(f);return c},subscribe:()=>c};return c},removeChannel:()=>{}
- })};
+  channel:()=>{const c={callbacks:[],on:(a,b,f)=>{subs.push(f);c.callbacks.push(f);return c},subscribe:()=>c};return c},removeChannel:c=>{subs=subs.filter(f=>!c.callbacks.includes(f))}
+ })}};
 })();
+
 

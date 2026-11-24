@@ -80,5 +80,16 @@ Manda el enlace por el grupo de WhatsApp. Cada padre se registra, elige "Familia
 
 ## Pruebas y agentes
 
+### Publicación condicionada a las pruebas
+
+El workflow propone la cadena `pruebas → empaquetar → publicar → smoke`. Solo un push a `main` puede publicar; las PR, las ejecuciones manuales y las programadas solo prueban. El artefacto contiene únicamente los recursos públicos de ese mismo commit, con `release.json` y hashes SHA-256. El smoke posterior espera ese SHA y comprueba los recursos antes de aceptar la pantalla de acceso; no da por válida una versión anterior.
+
+**Activación pendiente en los ajustes de GitHub:** mientras Pages conserve **Deploy from a branch**, su publicación automática seguirá siendo independiente de las pruebas. Para activar la garantía, el responsable debe cambiar **Settings → Pages → Source** a **GitHub Actions** en una ventana controlada y revisar los permisos del entorno `github-pages`. Esta PR no cambia esos ajustes, no publica la web y no ejecuta SQL. Antes de fusionar, coordina esa activación; después verifica el workflow y el smoke del SHA previsto. Conviene exigir el check `pruebas` para fusionar en `main`.
+
+Si un smoke posterior falla, la release ya se ha publicado: el fallo alerta, pero no restaura otra versión automáticamente. Para volver atrás, usa una revisión conocida que pase los tests y publícala por la misma cadena. Este cambio no incluye migraciones de base de datos.
+
+El cierre de sesión elimina inmediatamente las credenciales guardadas en este dispositivo y limpia el contenido privado. Después intenta revocar esa sesión mediante Auth; si no hay red, lo indica sin restaurar la sesión local. Las respuestas pendientes de clientes retirados se descartan. Una revocación de acceso bloquea la interfaz cuando se recibe el perfil actualizado; no puede deshacer descargas previas ni invalidar enlaces firmados ya emitidos.
+
 Las pruebas automáticas están en `tests/` y se ejecutan solas en GitHub Actions (cada push, cada PR y cada mañana). Las instrucciones para agentes de IA (Codex, Claude Code) están en `AGENTS.md`.
+
 
