@@ -112,6 +112,29 @@ def test_retirar_permisos_tecnicos_cierra_editor(app):
     assert app.locator('[data-act=go][data-v=admin]').count() == 0
 
 
+def test_reconfirmar_sesion_conserva_formulario_de_registro(app):
+    app.fill('#em', 'alta@x.es'); app.fill('#pw', '12345678'); app.click('[data-act=login]')
+    app.locator('[data-act=role][data-v=familiar]').wait_for()
+    app.click('[data-act=role][data-v=familiar]'); app.click('[data-act=go][data-v=reg]')
+    app.fill('#f-n', 'Prueba'); app.fill('#f-a', 'Registro'); app.click('[data-act=next]')
+    app.fill('#f-t', '600000000')
+    app.evaluate("window.__login('alta')")
+    app.wait_for_timeout(300)
+    assert app.locator('#f-t').input_value() == '600000000'
+    app.click('[data-act=next]')
+    assert app.locator('#f-h').is_visible()
+
+
+def test_error_inicial_de_acceso_ofrece_reintento(app):
+    app.evaluate("()=>{window.__profileError=true;window.__DB.profiles.push({id:'fam',approved:true,role:'familiar',nombre:'Prueba',apellidos:'Acceso'})}")
+    app.fill('#em', 'fam@x.es'); app.fill('#pw', '12345678'); app.click('[data-act=login]')
+    app.locator('[data-act=recheck]').wait_for()
+    assert app.locator('[data-act=tab]').count() == 0
+    app.evaluate('window.__profileError=false')
+    app.click('[data-act=recheck]')
+    app.locator('[data-act=tab][data-v=perfil]').wait_for()
+
+
 def test_primer_entrenador_espera_aprobacion(app):
     login_coach(app, approved=False)
     assert app.get_by_text('⏳ Pendiente de aprobación', exact=True).is_visible()

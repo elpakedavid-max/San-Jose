@@ -100,5 +100,18 @@ const deferred = () => {let resolve;const promise=new Promise(r=>resolve=r);retu
     const state=h.api.snapshot();assert.equal(state.view,'app');assert.equal(state.people+state.msgs+state.urls,0);
     assert.equal(state.logs,undefined);assert.equal(h.box.S.user.role,'familiar');
   }
+  {
+    const h=harness(),client=h.api.ensureAuthClient();h.api.setUser('a');h.box.S.user=null;
+    Object.assign(h.box.V,{view:'reg',step:2,reg:{nombre:'Prueba',role:'familiar'}});
+    client.profileReply=Promise.resolve({data:null,error:null});await h.api.boot();
+    assert.equal(h.box.V.view,'reg');assert.equal(h.box.V.step,2);assert.equal(h.box.V.reg.nombre,'Prueba');
+  }
+  {
+    const h=harness(),client=h.api.ensureAuthClient();h.api.setUser('a');h.box.S.user=null;h.box.V.view='loading';
+    client.profileReply=Promise.resolve({data:null,error:{message:'sin red'}});await h.api.boot();
+    assert.equal(h.box.V.view,'accesserror');assert.equal(h.box.S.user,null);
+    client.profileReply=Promise.resolve({data:{id:'a',approved:true,role:'familiar'}});await h.api.boot();
+    assert.equal(h.box.V.view,'app');
+  }
   console.log('OK: logout sin red, cliente retirado, cambio de cuenta, revocación y respuestas tardías');
 })().catch(e=>{console.error(e);process.exitCode=1});

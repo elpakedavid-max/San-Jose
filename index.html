@@ -174,6 +174,8 @@ function privateStateClear(){
  Object.keys(V).forEach(k=>delete V[k]);Object.assign(V,{view:'login',tab:'inicio',reg:{},step:1,rank:'gol',cmp:[1,2]});
 }
 function accessBlocked(profile){
+ // Reconfirmar la misma sesión durante el alta no descarta el formulario ni su DOM.
+ if(!profile&&['rol','intro','reg'].includes(V.view)&&!S.user?.approved){listen();return}
  accessEpoch++;privateStateClear();S.user=profile||null;
  V.view=profile?'pending':'rol';V.email=session?.user.email||'';listen();render();
 }
@@ -279,10 +281,10 @@ async function boot(){
  if(!session){S.user=null;if(!['signup','forgot'].includes(V.view))V.view='login';return render()}
  let task=authTask();const client=task.client;
  const {data:u,error}=await client.from('profiles').select('*').eq('id',task.uid).maybeSingle();if(!isCurrent(task))return;
- if(error){toast('No se ha podido comprobar el acceso. Inténtalo de nuevo.');return}
+ if(error){if(!hasAccess()){V.view='accesserror';render()}toast('No se ha podido comprobar el acceso. Inténtalo de nuevo.');return}
  if(!u||!u.approved)return accessBlocked(u);
  profileAccepted(u);task=authTask();await loadAll();if(!canRead(task))return;
- if(['loading','login','signup','forgot','rol','intro','reg','pending','newpw'].includes(V.view))V.view='app';
+ if(['loading','accesserror','login','signup','forgot','rol','intro','reg','pending','newpw'].includes(V.view))V.view='app';
  if(coach()&&CFG.dropboxKey)dbxLoad().catch(()=>{});
  render();
 }
@@ -296,7 +298,7 @@ function paintChat(){if(!hasAccess())return;if(V.view==='app'&&V.tab==='chat'){c
 async function refresh(){if(!session)return;if(!S.user?.approved)return boot();
  let task=authTask();const client=task.client;
  const {data:u,error}=await client.from('profiles').select('*').eq('id',task.uid).maybeSingle();if(!isCurrent(task))return;
- if(error){toast('No se ha podido comprobar el acceso. Inténtalo de nuevo.');return}
+ if(error){if(!hasAccess()){V.view='accesserror';render()}toast('No se ha podido comprobar el acceso. Inténtalo de nuevo.');return}
  if(!u||!u.approved)return accessBlocked(u);
  const changed=profileAccepted(u);task=authTask();await loadAll();if(!canRead(task))return;
  if(changed){V.view='app';return render()}
@@ -481,6 +483,7 @@ function pstats(id){
 /* ---------- vistas de acceso ---------- */
 const head=(t,back)=>`<div class="top"><button class="back" data-act="go" data-v="${back}" aria-label="Volver">‹</button><b class="sub" style="font-size:16px">${t}</b></div>`;
 const views={
+ accesserror:()=>`<div class="pad"><p class="info">No se ha podido comprobar el acceso. Inténtalo de nuevo.</p><button class="btn" data-act="recheck">Comprobar de nuevo</button><button class="btn ghost" data-act="logout">Cerrar sesión</button></div>`,
 logs:()=>{if(!coach())return views.admin();const L=V.logs||[],who=V.lgw||'',tb=V.lgt||'';
  const F=L.filter(x=>(!who||x.actor===who)&&(!tb||x.tbl===tb));
  const people=S.people.filter(x=>L.some(l=>l.actor===x.id));
@@ -1059,7 +1062,7 @@ const CHG={evdesc:(v,el)=>{const m=M(V.mid),e=m.ev[+v];if(!e)return;const d=el.v
 const OPEN_ACTIONS=new Set(['go','login','signup','forgot','newpw','oauth','role','dt','next','lang','help','recheck','logout','noop']);
 document.addEventListener('click',e=>{const t=e.target.closest('[data-act]');if(!t)return;if(REMOTE&&!hasAccess()&&!OPEN_ACTIONS.has(t.dataset.act))return;const f=ACT[t.dataset.act];if(f){if(t.dataset.act!=='shx'&&t.dataset.act!=='noop')e.stopPropagation();f(t.dataset.v,t,e)}});
 document.addEventListener('change',e=>{if(REMOTE&&!hasAccess())return;const t=e.target.closest('[data-chg]');if(t)CHG[t.dataset.chg](t.dataset.v,t)});
-function render(keep){if(REMOTE&&!hasAccess()&&!['loading','login','signup','forgot','newpw','rol','intro','reg','pending','ayuda'].includes(V.view))V.view=session?(S.user?'pending':'rol'):'login';const y=scrollY;app.innerHTML=views[V.view]()+(V.clip?clipSheet():'');if(V.clip)setupClip();if(keep||V.view==='lineup'||V.view==='lista')scrollTo(0,y);else scrollTo(0,0)}
+function render(keep){if(REMOTE&&!hasAccess()&&!['loading','accesserror','login','signup','forgot','newpw','rol','intro','reg','pending','ayuda'].includes(V.view))V.view=session?(S.user?'pending':'rol'):'login';const y=scrollY;app.innerHTML=views[V.view]()+(V.clip?clipSheet():'');if(V.clip)setupClip();if(keep||V.view==='lineup'||V.view==='lista')scrollTo(0,y);else scrollTo(0,0)}
 setInterval(()=>{for(const c of document.querySelectorAll('[data-clock]')){const m=M(c.dataset.clock);if(m&&m.run)c.textContent=clk(m)}},1000);
 if(REMOTE){ensureAuthClient();window.addEventListener('storage',e=>{if(e.key===AUTH_STORAGE_KEY&&!e.newValue&&session)localSessionEnd()})}
 if('serviceWorker' in navigator&&location.protocol==='https:')navigator.serviceWorker.register('sw.js').catch(()=>{});
