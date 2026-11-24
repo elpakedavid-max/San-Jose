@@ -4,6 +4,8 @@
 # Qué revisa:
 #   1. Secretos    → Gitleaks: contraseñas, tokens y claves subidas al repo (también en el historial).
 #   2. Código      → Semgrep: fallos típicos (XSS, inyecciones, eval, criptografía débil, OWASP Top 10…).
+#                    Se excluye el aviso de "JWT en el código" porque la clave anon de Supabase es pública
+#                    por diseño; las claves secretas (service_role) las detecta el paso 3.
 #   3. Supabase    → que ninguna tabla quede sin RLS, que no haya claves service_role y políticas peligrosas.
 #
 # Cuándo se ejecuta: en cada subida a main, en cada pull request, cada lunes por la mañana
@@ -55,19 +57,21 @@ jobs:
         run: |
           semgrep scan --metrics=off \
             --config p/default --config p/owasp-top-ten --config p/javascript \
-            --text --output semgrep.txt || true
+            --exclude-rule generic.secrets.security.detected-jwt-token.detected-jwt-token \
+            --text --output /tmp/semgrep.txt || true
           {
             echo '## Semgrep — informe completo'
             echo
             echo '```'
-            head -c 60000 semgrep.txt
+            head -c 60000 /tmp/semgrep.txt
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
-          cat semgrep.txt
+          cat /tmp/semgrep.txt
       - name: Fallos graves (hacen fallar)
         run: |
           semgrep scan --metrics=off \
             --config p/default --config p/owasp-top-ten --config p/javascript \
+            --exclude-rule generic.secrets.security.detected-jwt-token.detected-jwt-token \
             --severity ERROR --error
 
   supabase:

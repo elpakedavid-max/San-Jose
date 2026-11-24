@@ -5,3 +5,5 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 7   # espera una semana antes de proponer versiones nuevas
