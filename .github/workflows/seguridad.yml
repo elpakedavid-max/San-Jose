@@ -1,0 +1,82 @@
+# Revisión de seguridad común para las apps de MR Informática.
+# Es el mismo fichero en todos los repos: si lo mejoras, cópialo igual en los demás.
+#
+# Qué revisa:
+#   1. Secretos    → Gitleaks: contraseñas, tokens y claves subidas al repo (también en el historial).
+#   2. Código      → Semgrep: fallos típicos (XSS, inyecciones, eval, criptografía débil, OWASP Top 10…).
+#   3. Supabase    → que ninguna tabla quede sin RLS, que no haya claves service_role y políticas peligrosas.
+#
+# Cuándo se ejecuta: en cada subida a main, en cada pull request, cada lunes por la mañana
+# y a mano desde la pestaña Actions → "Seguridad" → "Run workflow".
+
+name: Seguridad
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: '43 6 * * 1'   # lunes ~07:43 (hora de Madrid en invierno)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seguridad-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  secretos:
+    name: Secretos (Gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0        # revisa todo el historial, no solo el último cambio
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'false'
+
+  codigo:
+    name: Código (Semgrep)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: semgrep/semgrep
+    steps:
+      - uses: actions/checkout@v4
+      - name: Informe completo (no hace fallar)
+        run: |
+          semgrep scan --metrics=off \
+            --config p/default --config p/owasp-top-ten --config p/javascript \
+            --text --output semgrep.txt || true
+          {
+            echo '## Semgrep — informe completo'
+            echo
+            echo '```'
+            head -c 60000 semgrep.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          cat semgrep.txt
+      - name: Fallos graves (hacen fallar)
+        run: |
+          semgrep scan --metrics=off \
+            --config p/default --config p/owasp-top-ten --config p/javascript \
+            --severity ERROR --error
+
+  supabase:
+    name: Supabase (RLS y claves)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python3 .github/seguridad/revisar_supabase.py .
