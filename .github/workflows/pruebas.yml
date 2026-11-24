@@ -5,8 +5,11 @@ on:
     branches: [main]
   pull_request:
   schedule:
-    - cron: '17 6 * * *'   # cada día ~07:17 (hora de Madrid en invierno)
+    - cron: '17 6 * * *'
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 jobs:
   pruebas:
@@ -14,13 +17,15 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Permisos SQL e instalación desde cero (PostgreSQL aislado)
+      - name: Permisos SQL e instalación desde cero
         run: |
           npm install --no-save --package-lock=false --ignore-scripts @electric-sql/pglite@0.3.14
           node tests/test_schema.mjs
@@ -28,18 +33,95 @@ jobs:
         run: |
           pip install pytest playwright
           playwright install --with-deps chromium
-      - name: Sintaxis del JavaScript
+      - name: Sintaxis JavaScript
         run: |
           python3 -c "import re;s=open('index.html').read();open('/tmp/app.js','w').write(re.search(r'<script>\n(\{.*\})\n</script>',s,re.S).group(1))"
           node --check /tmp/app.js
           node --check sw.js
-      - name: Pruebas de caché del service worker
-        run: node tests/test_sw.cjs
-      - name: Pruebas de la app (Supabase simulado)
+          node --check tests/mock_supabase.js
+      - name: Regresiones de sesión y caché
+        run: |
+          node tests/test_session.cjs
+          node tests/test_sw.cjs
+      - name: Artefacto y espera de release (sin red)
+        run: pytest -q tests/test_release.py
+      - name: Interfaz (Supabase simulado)
         run: pytest -q tests/test_app.py
-      - name: Comprobar la web publicada
+      - name: Comprobar la web publicada (solo lectura)
         if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
         env:
           LIVE: '1'
         run: pytest -q tests/test_live.py
 
+  empaquetar:
+    needs: pruebas
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Preparar solo recursos públicos del commit probado
+        run: python3 scripts/prepare_release.py --sha "$GITHUB_SHA"
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  publicar:
+    needs: empaquetar
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: pages-production
+      cancel-in-progress: false
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: No publicar una revisión que main ya ha sustituido
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 - <<'PY'
+          import json, os, urllib.request
+          url = 'https://api.github.com/repos/' + os.environ['GITHUB_REPOSITORY'] + '/git/ref/heads/main'
+          request = urllib.request.Request(url, headers={'Authorization': 'Bearer ' + os.environ['GH_TOKEN']})
+          with urllib.request.urlopen(request, timeout=15) as response:
+              current = json.load(response)['object']['sha']
+          if current != os.environ['GITHUB_SHA']:
+              raise SystemExit('main avanzó: esta revisión no se publica')
+          PY
+      - uses: actions/deploy-pages@v4
+        id: deployment
+
+  smoke:
+    needs: publicar
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: |
+          pip install pytest playwright
+          playwright install --with-deps chromium
+      - name: Esperar el SHA desplegado y comprobar sus recursos
+        env:
+          LIVE: '1'
+          APP_URL: ${{ needs.publicar.outputs.page_url }}
+          EXPECTED_SHA: ${{ github.sha }}
+        run: pytest -q tests/test_live.py

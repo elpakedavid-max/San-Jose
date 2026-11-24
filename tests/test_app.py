@@ -28,6 +28,8 @@ def app(browser):
     pg.route('**/fonts.*/**', lambda r: r.abort())
     pg.route('**/supabase.js', lambda r: r.fulfill(path=MOCK, content_type='text/javascript'))
     pg.route('**/config.js*', lambda r: r.fulfill(body=CFG, content_type='text/javascript'))
+    # El cierre remoto se simula; ninguna prueba llama al Auth real.
+    pg.route('**/auth/v1/logout*', lambda r: r.fulfill(status=503, body='sin red'))
     pg.goto((ROOT / 'index.html').as_uri())
     pg.wait_for_timeout(300)
     pg.errs = errs
@@ -56,6 +58,81 @@ def add_match(pg, ev):
 def test_pantalla_de_acceso(app):
     assert app.locator('#em').is_visible()
     assert app.locator('[data-act=login]').is_visible()
+
+
+def test_logout_sin_red_no_recupera_sesion_al_recargar(app):
+    login_coach(app)
+    assert app.evaluate("!!localStorage.getItem('sb-x-auth-token')")
+    app.click('[data-act=tab][data-v=perfil]')
+    app.click('[data-act=logout]')
+    app.wait_for_selector('#em')
+    assert app.evaluate("localStorage.getItem('sb-x-auth-token')") is None
+    app.reload()
+    app.wait_for_selector('#em')
+    assert app.locator('[data-act=tab]').count() == 0
+
+
+@pytest.mark.parametrize('editor', [False, True])
+def test_revocacion_bloquea_chat_y_editor(app, editor):
+    login_coach(app)
+    if editor:
+        add_match(app, [])
+        app.click('[data-act=tab][data-v=partidos]')
+        app.click('[data-act=match]'); app.click('[data-act=medit]')
+        app.locator('#er').focus()
+    else:
+        app.click('[data-act=tab][data-v=chat]')
+        app.fill('#mtxt', 'Borrador sintético privado')
+        app.locator('#mtxt').focus()
+    app.evaluate("()=>{window.__DB.profiles.find(p=>p.id==='coach').approved=false;window.__fire()}")
+    app.get_by_text('⏳ Pendiente de aprobación', exact=True).wait_for()
+    assert app.locator('#mtxt, #er, [data-act=tab], [data-act=msave]').count() == 0
+
+
+def test_cambio_de_cuenta_no_conserva_panel_tecnico(app):
+    login_coach(app)
+    app.click('[data-act=tab][data-v=perfil]')
+    app.click('[data-act=logout]')
+    app.wait_for_selector('#em')
+    login_familia(app)
+    app.click('[data-act=tab][data-v=perfil]')
+    assert app.locator('[data-act=go][data-v=admin]').count() == 0
+
+
+def test_retirar_permisos_tecnicos_cierra_editor(app):
+    login_coach(app)
+    add_match(app, [])
+    app.click('[data-act=tab][data-v=partidos]')
+    app.click('[data-act=match]'); app.click('[data-act=medit]')
+    app.locator('#er').focus()
+    app.evaluate("()=>{Object.assign(window.__DB.profiles.find(p=>p.id==='coach'),{role:'familiar',admin:false});window.__fire()}")
+    app.locator('[data-act=tab][data-v=perfil]').wait_for()
+    assert app.locator('#er, [data-act=msave]').count() == 0
+    app.click('[data-act=tab][data-v=perfil]')
+    assert app.locator('[data-act=go][data-v=admin]').count() == 0
+
+
+def test_reconfirmar_sesion_conserva_formulario_de_registro(app):
+    app.fill('#em', 'alta@x.es'); app.fill('#pw', '12345678'); app.click('[data-act=login]')
+    app.locator('[data-act=role][data-v=familiar]').wait_for()
+    app.click('[data-act=role][data-v=familiar]'); app.click('[data-act=go][data-v=reg]')
+    app.fill('#f-n', 'Prueba'); app.fill('#f-a', 'Registro'); app.click('[data-act=next]')
+    app.fill('#f-t', '600000000')
+    app.evaluate("window.__login('alta')")
+    app.wait_for_timeout(300)
+    assert app.locator('#f-t').input_value() == '600000000'
+    app.click('[data-act=next]')
+    assert app.locator('#f-h').is_visible()
+
+
+def test_error_inicial_de_acceso_ofrece_reintento(app):
+    app.evaluate("()=>{window.__profileError=true;window.__DB.profiles.push({id:'fam',approved:true,role:'familiar',nombre:'Prueba',apellidos:'Acceso'})}")
+    app.fill('#em', 'fam@x.es'); app.fill('#pw', '12345678'); app.click('[data-act=login]')
+    app.locator('[data-act=recheck]').wait_for()
+    assert app.locator('[data-act=tab]').count() == 0
+    app.evaluate('window.__profileError=false')
+    app.click('[data-act=recheck]')
+    app.locator('[data-act=tab][data-v=perfil]').wait_for()
 
 
 def test_primer_entrenador_espera_aprobacion(app):
@@ -227,3 +304,4 @@ def test_mejores_jugadas_en_estadisticas(app):
     app.click('[data-act=tab][data-v=stats]'); app.wait_for_timeout(200)
     txt = app.inner_text('body')
     assert 'Mejores jugadas y paradas (2)' in txt and 'Regate' in txt
+
