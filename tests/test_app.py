@@ -305,3 +305,15 @@ def test_mejores_jugadas_en_estadisticas(app):
     txt = app.inner_text('body')
     assert 'Mejores jugadas y paradas (2)' in txt and 'Regate' in txt
 
+
+
+def test_galeria_no_descarga_videos(app):
+    login_coach(app)
+    app.evaluate("""()=>{const D=window.__DB;D.media=D.media||[];D.media.push(
+      {id:501,path:'coach/a.mp4',thumb:null,kind:'video',approved:true,season:'2026/27',uploader:'coach',created_at:new Date().toISOString()},
+      {id:502,path:'coach/b.mp4',thumb:'coach/b_t.jpg',kind:'video',approved:true,season:'2026/27',uploader:'coach',created_at:new Date().toISOString()},
+      {id:503,path:'coach/c.jpg',thumb:'coach/c_t.jpg',kind:'foto',approved:true,season:'2026/27',uploader:'coach',created_at:new Date().toISOString()});window.__fire()}""")
+    app.click('[data-act=tab][data-v=galeria]'); app.wait_for_timeout(500)
+    assert app.locator('.tile video').count() == 0
+    assert app.locator('.tile .vph').count() >= 1
+    assert app.evaluate("localStorage.getItem('sj-urlc')") is not None
