@@ -30,6 +30,8 @@ def app(browser):
     pg.route('**/config.js*', lambda r: r.fulfill(body=CFG, content_type='text/javascript'))
     # El cierre remoto se simula; ninguna prueba llama al Auth real.
     pg.route('**/auth/v1/logout*', lambda r: r.fulfill(status=503, body='sin red'))
+    # Los vídeos de YouTube incrustados no se cargan en las pruebas.
+    pg.route('**/*youtube*.com/**', lambda r: r.fulfill(body='<!doctype html><title>video</title>', content_type='text/html'))
     pg.goto((ROOT / 'index.html').as_uri())
     pg.wait_for_timeout(300)
     pg.errs = errs
