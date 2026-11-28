@@ -317,3 +317,35 @@ def test_galeria_no_descarga_videos(app):
     assert app.locator('.tile video').count() == 0
     assert app.locator('.tile .vph').count() >= 1
     assert app.evaluate("localStorage.getItem('sj-urlc')") is not None
+
+
+def test_privado_entre_familias(app):
+    app.evaluate("()=>{window.__DB.profiles.push({id:'peer',approved:true,role:'familiar',pid:6,nombre:'Luis',apellidos:'Prueba',email:'peer@x.es'})}")
+    login_familia(app)
+    app.click('[data-act=tab][data-v=chat]'); app.wait_for_timeout(200)
+    app.click('[data-act=chsel][data-v=dms]'); app.wait_for_timeout(200)
+    app.select_option('#dmto', 'peer'); app.click('[data-act=dmnew]'); app.wait_for_timeout(200)
+    app.fill('#mtxt', 'Hola Luis'); app.click('[data-act=msend]'); app.wait_for_timeout(300)
+    ch = app.evaluate("window.__DB.messages.find(m=>m.body==='Hola Luis')?.channel")
+    assert ch == 'dm:' + ':'.join(sorted(['fam', 'peer']))
+    assert 'Solo la leéis vosotros dos' in app.inner_text('body')
+
+
+def test_estadisticas_en_directo(app):
+    login_coach(app)
+    app.evaluate("()=>{window.__DB.matches.push({id:9,season:'2026/27',rival:'Rival Prueba',fecha:'2026-11-29',local:true,dur:50,estado:'live',tit:[5,6],ev:[{t:'gol',min:3,pl:5}],acc:120,run:null,video:null});window.__fire()}")
+    app.wait_for_timeout(400)
+    app.click('[data-act=tab][data-v=partidos]'); app.click('[data-act=match][data-v="9"]'); app.wait_for_timeout(200)
+    app.click('[data-act=golive]'); app.wait_for_timeout(200)
+    app.click('[data-act=st][data-v="corner:n"]'); app.click('[data-act=st][data-v="corner:n"]')
+    app.click('[data-act=st][data-v="corner:r"]'); app.click('[data-act=st][data-v="tiro_f:r"]')
+    app.click('[data-act=stm][data-v="corner:n"]'); app.wait_for_timeout(200)
+    ev = app.evaluate("window.__DB.matches.find(m=>m.id==9).ev.filter(e=>e.t==='st').map(e=>e.k+':'+e.s)")
+    assert sorted(ev) == ['corner:n', 'corner:r', 'tiro_f:r']
+    assert app.inner_text('[data-act=st][data-v="tiro_p:n"]') == '1'  # el gol cuenta como tiro a puerta
+    app.click('[data-act=undo]'); app.wait_for_timeout(150)  # deshacer quita el gol, no las estadísticas
+    ev = app.evaluate("window.__DB.matches.find(m=>m.id==9).ev.map(e=>e.t)")
+    assert 'gol' not in ev and ev.count('st') == 3
+    app.fill('#strm', 'https://youtube.com/live/abcdefghijk'); app.click('[data-act=strsave]'); app.wait_for_timeout(200)
+    assert app.evaluate("window.__DB.matches.find(m=>m.id==9).stream") == 'https://youtube.com/live/abcdefghijk'
+    assert app.locator('iframe[src*="youtube-nocookie.com/embed/abcdefghijk"]').count() == 1

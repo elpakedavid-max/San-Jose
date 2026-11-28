@@ -166,7 +166,7 @@ grant execute on function public.is_member(), public.is_staff() to authenticated
 -- ---------- Chat ----------
 create table if not exists public.messages (
   id          bigint generated always as identity primary key,
-  channel     text not null check (channel = 'grupo' or channel like 'dm:%'),  -- 'grupo' o 'dm:<id de la familia>'
+  channel     text not null check (channel = 'grupo' or channel like 'dm:%'),  -- 'grupo' o 'dm:<uid>:<uid>' (privado entre dos usuarios)
   author      uuid default auth.uid() references auth.users on delete set null,
   author_name text,
   author_info text,
@@ -197,12 +197,64 @@ end $$;
 drop trigger if exists messages_guard on public.messages;
 create trigger messages_guard before insert on public.messages for each row execute function public.messages_guard();
 revoke execute on function public.messages_guard() from public, anon, authenticated;
+-- Privados uno a uno: canal 'dm:<uid menor>:<uid mayor>' (orden de texto "C").
+-- Los canales antiguos 'dm:<uid de la familia>' (buzón compartido del cuerpo técnico) quedan de solo lectura.
+-- Las cuentas de jugador solo pueden hablar en privado con el cuerpo técnico, y los administradores
+-- pueden leer esas conversaciones (son menores).
+create or replace function public.dm_allowed(other uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select other is not null and other <> auth.uid() and public.is_member()
+    and exists (select 1 from profiles o where o.id = other and o.approved)
+    and (
+      public.is_staff()
+      or exists (select 1 from profiles o where o.id = other and (o.role = 'entrenador' or o.admin))
+      or (coalesce((select role from profiles where id = auth.uid()), '') <> 'jugador'
+          and coalesce((select role from profiles where id = other), '') <> 'jugador')
+    );
+$$;
+revoke execute on function public.dm_allowed(uuid) from public, anon;
+grant execute on function public.dm_allowed(uuid) to authenticated;
+
+create or replace function public.dm_targets()
+returns table (id uuid, staff boolean)
+language sql stable security definer set search_path = public as $$
+  select pr.id, (pr.role = 'entrenador' or pr.admin)
+  from profiles pr where pr.approved and public.dm_allowed(pr.id);
+$$;
+revoke execute on function public.dm_targets() from public, anon;
+grant execute on function public.dm_targets() to authenticated;
+
+create or replace function public.dm_party(ch text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select ch ~ '^dm:[0-9a-f-]{36}:[0-9a-f-]{36}$'
+    and (split_part(ch, ':', 2) = auth.uid()::text or split_part(ch, ':', 3) = auth.uid()::text);
+$$;
+create or replace function public.dm_minor_oversight(ch text) returns boolean
+language sql stable security definer set search_path = public as $$
+  select ch ~ '^dm:[0-9a-f-]{36}:[0-9a-f-]{36}$'
+    and exists (select 1 from profiles where id = auth.uid() and admin and approved)
+    and exists (select 1 from profiles j where j.role = 'jugador'
+                and j.id::text in (split_part(ch, ':', 2), split_part(ch, ':', 3)));
+$$;
+revoke execute on function public.dm_party(text), public.dm_minor_oversight(text) from public, anon;
+grant execute on function public.dm_party(text), public.dm_minor_oversight(text) to authenticated;
+
 drop policy if exists "leer chat" on public.messages;
 create policy "leer chat" on public.messages for select using (
-  public.is_member() and (channel = 'grupo' or channel = 'dm:' || auth.uid()::text or public.is_staff()));
+  public.is_member() and (
+    channel = 'grupo'
+    or channel = 'dm:' || auth.uid()::text                              -- buzón antiguo propio
+    or (public.is_staff() and channel ~ '^dm:[0-9a-f-]{36}$')           -- buzones antiguos
+    or public.dm_party(channel)
+    or public.dm_minor_oversight(channel)));
 drop policy if exists "escribir chat" on public.messages;
 create policy "escribir chat" on public.messages for insert with check (
-  public.is_member() and (channel = 'grupo' or channel = 'dm:' || auth.uid()::text or (public.is_staff() and channel like 'dm:%')));
+  public.is_member() and (
+    channel = 'grupo'
+    or (public.dm_party(channel)
+        and split_part(channel, ':', 2) < split_part(channel, ':', 3) collate "C"
+        and public.dm_allowed((case when split_part(channel, ':', 2) = auth.uid()::text
+                                    then split_part(channel, ':', 3) else split_part(channel, ':', 2) end)::uuid))));
 drop policy if exists "borrar chat" on public.messages;
 create policy "borrar chat" on public.messages for delete using (author = auth.uid() or public.is_staff());
 grant select, insert, delete on public.messages to authenticated;
@@ -350,6 +402,7 @@ create policy "sj media borrar" on storage.objects for delete to authenticated
 
 -- ---------- Temporadas ----------
 alter table public.matches   add column if not exists season text;
+alter table public.matches   add column if not exists stream text;  -- enlace a la retransmisión (YouTube, etc.)
 alter table public.trainings add column if not exists season text;
 alter table public.media     add column if not exists season text;
 alter table public.players   add column if not exists seasons text[] not null default '{}';

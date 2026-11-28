@@ -114,10 +114,22 @@ try {
   await as('family', `insert into public.media(id,path,kind) values (201,$1,'foto'),(202,$2,'foto')`,
     [file('family','pending.jpg'),file('family','approved.jpg')]);
   await as('staff', 'update public.media set approved=true,thumb=$1 where id=202', [file('family','thumb.jpg')]);
+  const dm = (x, y) => 'dm:' + [ids[x], ids[y]].sort().join(':');
   await as('family', `insert into public.messages(channel,body,audio) values ($1,'Audio de prueba',$2)`,
-    [`dm:${ids.family}`,file('family','private.webm')]);
+    [dm('family','staff'),file('family','private.webm')]);
   await as('staff', `insert into public.messages(channel,body,audio) values ($1,'Respuesta de prueba',$2)`,
-    [`dm:${ids.family}`,file('staff','reply.webm')]);
+    [dm('family','staff'),file('staff','reply.webm')]);
+  // Privados uno a uno: solo las dos personas; el orden del canal es fijo; el buzón antiguo es de solo lectura.
+  await as('family', `insert into public.messages(channel,body) values ($1,'Hola')`, [dm('family','peer')]);
+  await as('peer', `insert into public.messages(channel,body) values ($1,'Hola')`, [dm('family','peer')]);
+  assert.equal((await as('family', 'select id from messages where channel=$1', [dm('family','peer')])).rows.length, 2);
+  assert.equal((await as('staff', 'select id from messages where channel=$1', [dm('family','peer')])).rows.length, 0);
+  const [lo, hi] = [ids.family, ids.peer].sort();
+  await assert.rejects(as('family', `insert into messages(channel,body) values ($1,'x')`, [`dm:${hi}:${lo}`]), /row-level security/);
+  await assert.rejects(as('peer', `insert into messages(channel,body) values ($1,'x')`, [dm('family','staff')]), /row-level security/);
+  await assert.rejects(as('family', `insert into messages(channel,body) values ($1,'x')`, [dm('family','pending')]), /row-level security/);
+  await assert.rejects(as('family', `insert into messages(channel,body) values ($1,'x')`, [`dm:${ids.family}`]), /row-level security/);
+  console.log('OK: privados uno a uno entre usuarios aprobados');
   await as('peer', `insert into public.messages(channel,body,audio) values ('grupo','Audio de grupo',$1)`,
     [file('peer','group.webm')]);
   await as('family', 'update public.profiles set avatar=$1 where id=auth.uid()', [file('family','avatar.jpg')]);
